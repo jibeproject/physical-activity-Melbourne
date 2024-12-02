@@ -1,0 +1,681 @@
+---
+title: "Melbourne physical activity"
+format: html
+editor: visual
+author: Belen Zapata-Diomedi
+date: 21/11/2023
+---
+
+# Introduction
+
+Descriptive analysis of Victorian Population Health Survey 2015-2019 and National Health Survey 2017-2018 to compare physical activity time per week doing different activities and total marginal metabolics of task. Also, summary of relevant information from dose-response meta-analyses in relation to definition of physical activity and distribution of physical activity in the cohorts used to derive the dose-response functions.
+
+# Meta analyses
+
+## Peer-reviewed studies
+
+Garcia, L., et al. (2023). "Non-occupational physical activity and risk of cardiovascular disease, cancer and mortality outcomes: a dose-response meta-analysis of large prospective studies." British Journal of Sports Medicine: bjsports-2022-105669.
+
+Pearce, M., et al. (2022). "Association Between Physical Activity and Risk of Depression: A Systematic Review and Meta-analysis." JAMA Psychiatry 79(6): 550-559.
+
+Smith, A. D., et al. (2016). "Physical activity and incident type 2 diabetes mellitus: a systematic review and dose--response meta-analysis of prospective cohort studies." Diabetologia: 1-19.
+
+**Population:** general adult population aged 18 and over and without pre-existing conditions.
+
+**Exposure:** non-occupational physical activity. This includes leisure-time physical activity alone, combined with other non-occupational physical activity domains (e.g. transport and/or domestic activity), or combined with specific types of activity such as walking.
+
+**Outcomes:** mortality all cause and disease specific (fatal), incidence (non-fatal) and fatal and non-fatal combined. Depression only incidence. ICD-10 for disease classification.
+
+**Metabolic Equivalent of Task values:** light: 1.5; moderate: 3.5; and vigorous: 7.
+
+-   Garcia et al: total cardiovascular disease, coronary heart disease, stroke, heart failure, total cancer and site specific cancers (head and neck, myeloid leukemia, myeloma, gastric cardia, lung, liver, endometrium, colon, breast, bladder, rectum, oesophagus, prostate, kidney)
+
+-   Pearce et al: depression
+
+-   Smith et al: type 2 diabetes.
+
+## Web interface
+
+[Meta-Analyses Physical Activity (cam.ac.uk)](https://shiny.mrc-epid.cam.ac.uk/meta-analyses-physical-activity/)
+
+## Package
+
+Introduction to Dose-Response Physical Activity (drpa) package (meta-analyses.github.io)
+
+`{r}remotes::install_github("meta-analyses/drpa")}`
+
+```         
+```
+
+## Distribution of mMETs for all-cause mortality for the total population included in Garcia et al MA
+
+Discuss with Mat whether we can have by age groups.
+
+| Population | Min | 1st QRT | Median | Mean   | 3rd QRT | Max    |
+|------------|-----|---------|--------|--------|---------|--------|
+| Men        | 0   | 2.73    | 10.66  | 18.698 | 23.87   | 156.45 |
+| Women      | 0   | 2.61    | 10.66  | 17.352 | 22.82   | 103.6  |
+| Total      | 0   | 2.35    | 10.5   | 16.908 | 22.5    | 130    |
+
+: Physical activity
+
+**Data sets**
+
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Variables                              | VPHS                                                                                                                                                                                                                                           | NHS                                                                                                                                                                                                                                                                                                                                                              |
++========================================+================================================================================================================================================================================================================================================+==================================================================================================================================================================================================================================================================================================================================================================+
+| Age                                    | **age:** in one year age intervals                                                                                                                                                                                                             | **AGEB:**                                                                                                                                                                                                                                                                                                                                                        |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                | *1.* 0-4 years; *2.* 5-9 years, *3*. 10-14 years, *4*. 15-17 years, *5*.18-19 years, *6*. 20-24 years, *7*. 25-29 years, *8*. 30-34 years, *9*. 35-39 years, *10.* 40-44 years, *11.* 45-49 years, *12*. 50-54 years, *13*. 55-59 years, *14*. 60-64 years, *15*. 65-69 years, *16.* 70-74 years, *17*. 75-79 years, *18*. 80-84 years, *19*. 85 years and over. |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Sex                                    | p5 Gender                                                                                                                                                                                                                                      | **SEX**                                                                                                                                                                                                                                                                                                                                                          |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | 1.  male                                                                                                                                                                                                                                       | *1.*Males, *2*. Female                                                                                                                                                                                                                                                                                                                                           |
+|                                        | 2.  female                                                                                                                                                                                                                                     |                                                                                                                                                                                                                                                                                                                                                                  |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Employment                             |                                                                                                                                                                                                                                                | **LFSBC:** labour force status                                                                                                                                                                                                                                                                                                                                   |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                | *0.*Not applicable, *1.* Employed, *2.* Unemployed, *3.* Not in the labour force.                                                                                                                                                                                                                                                                                |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Hours worked per week                  |                                                                                                                                                                                                                                                | **USHRWKN:** hours usually worked per week.                                                                                                                                                                                                                                                                                                                      |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                | 0.  Not applicable, 1. 15 hours or less, 2. 16 to 24, 3. 25 to 34, 4. 35 to 39, 5. 40, 6. 41 to 49, 7. 50 hours and over.                                                                                                                                                                                                                                        |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Study                                  |                                                                                                                                                                                                                                                | STDYFPT: whether currently working full time or part time.                                                                                                                                                                                                                                                                                                       |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                | 0.  not applicable, 1. studying full time, 2. studying part time, 3. not studying.                                                                                                                                                                                                                                                                               |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Walking                                | **F2** What do you estimate was the **total time** you spent walking in this way in the last week? (has walked continuously for at least 10 minutes)                                                                                           | **EXFSRMIN** Total minutes walked for fitness, recreation or sport in last week (for at least 10 minutes)                                                                                                                                                                                                                                                        |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f2hr**Hours spent walking \[Base: Response in hours\]                                                                                                                                                                                        | **EXTRAMIN** Total minutes spent walking for transport in last week (for at least 10 minutes)                                                                                                                                                                                                                                                                    |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f2min** F2. Minutes spent walking \[Base: Response in minutes\]                                                                                                                                                                              |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f2tot** (TOTAL) minutes spent walking \[Base: Walked continuously for at least 10 minutes in the last week).                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                  |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Vigorous                               | **F4** What do you estimate was the total time you spent doing these vigorous household chores in the last week?                                                                                                                               | **EXLWVMIN** Total minutes undertaken vigorous exercise last week (for example, playing basketball, running, lifting heavy boxes, and strength and toning exercises)                                                                                                                                                                                             |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f4hr**Hours spent doing vigorous household chores  \[Base: Provided answer in hours\]                                                                                                                                                        | **VIGMINS** total time doing recreational and occupational PA.                                                                                                                                                                                                                                                                                                   |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f4min** Minutes spent doing vigorous household chores \[Base: Provided answer in minutes\]                                                                                                                                                   |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f4tot**Minutes spent doing vigorous household chores \[Base: Total sample\]                                                                                                                                                                  |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **F6** What do you estimate was the total time that you spent doing this vigorous physical activity in the last week? (excludes householdld chores, for example, tennis, jogging, cycling, keep fit exersice)                                  |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f6hr** Hours spent doing vigorous physical activity \[Base: Provided answer in hours\]                                                                                                                                                       |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f6min** Minutes spent doing vigorous physical activity \[Base: Provided answer in minutes\]                                                                                                                                                  |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f6tot** (TOTAL) Minutes spent doing vigorous physical activity \[Base: Total Sample\]                                                                                                                                                        |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **F12** What do you estimate was the total time that you spent doing vigorous gardening or heavy work around the yard in the last week? (any vigorous gardening or heavy work around the yard, which made you breathe harder or puff and pant) |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f12hr** Hours spent doing vigorous gardening or heavy work around the yard \[Base: Provided answer in hours\]                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f12min** Minutes spent doing vigorous gardening or heavy work around the yard \[Base: Provided answer in minutes\]                                                                                                                           |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f12tot** (TOTAL) Minutes spent doing vigorous gardening or heavy work around the yard\[Base: Total Sample\]                                                                                                                                  |                                                                                                                                                                                                                                                                                                                                                                  |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Moderate                               | **F10** What do you estimate was the total time that you spent doing these activities in the last week? (other more moderate physical activities that you have not already mentioned? (e.g. gentle swimming, social tennis, golf).             | **EXLWMMIN** Total minutes undertaken moderate exercise last week (for example, a light jog, strenght and toning exercises, lifting small boxes and sweeping)                                                                                                                                                                                                    |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f10hr** Hours spent doing other more moderate physical activity \[Base: Provided answer in hours\]                                                                                                                                           | **MODMINS** Total minutes doing moderate PA, includes recreational and occupational                                                                                                                                                                                                                                                                              |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f10min** Minutes spent doing other more moderate physical activity \[Base: Provided answer in minutes\]                                                                                                                                      |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        | **f12tot** (TOTAL) Minutes spent doing other more moderate physical activity \[Base: Total Sample\]                                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                                  |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Type of excersice                      |                                                                                                                                                                                                                                                | **EXTYPELW** Type of exercise undertaken for fitness, recreation or sport in last week (time series)                                                                                                                                                                                                                                                             |
+|                                        |                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                  |
+|                                        |                                                                                                                                                                                                                                                | **EXTYPLWA** Type of exercise undertaken for fitness, recreation, sport or to get to places in last week                                                                                                                                                                                                                                                         |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Self reported height in cm             |                                                                                                                                                                                                                                                | **SRHEIGHT** 0 not applicable; 98 not known                                                                                                                                                                                                                                                                                                                      |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Self reported weight in kg             |                                                                                                                                                                                                                                                | **SRWEIGHT** 0 not applicable; 98 not known                                                                                                                                                                                                                                                                                                                      |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Self reported body mass index-measured |                                                                                                                                                                                                                                                | **SRBMICTH** 0 not applicable; 98 not known                                                                                                                                                                                                                                                                                                                      |
++----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+# Surveys
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+```
+
+## **National Health Survey 2017-2018**
+
+Sample of young adults and adults (over 15 years old) across all states and territories. State level data samples are small and not reliable for analysis. Below demographic, socio-economic, and physical activity variables were selected.
+
+```{r}
+
+# Read the data and select variables
+pa_NHS <- read_csv(paste0(getwd(),"/data/NHS/NHS17SPB.csv")) # data set with age, sex and risk factors
+
+pa_NHS  <- pa_NHS[order(pa_NHS$ABSPID),]
+
+pa_NHS <- pa_NHS  %>% dplyr::select(ABSHIDB, SEX, LFSBC, USHRWKB, STDYFTPT, AGEB, EXTYPELW, EXTYPLWA, EXREGUIC, MODMINS,VIGMINS, EXLWMMIN, EXLWVMIN, WPAMMIN, WPAVMIN,
+                         EXFSRMIN, LFSBC, OCCUP13B, EXREGUIC, PAG18T64, EXLWKTNO, PAG15T17, EXTRAMIN, SRBMISCR) %>% filter (AGEB > 4) ##  Only keep 18 plus data to match PA DRA and also under 15 does not have PA data
+
+## Meta-analyais is for population without pre-existing conditions. Here we are including everyone. 
+```
+
+Sample for young adults and adults is 17,248 people for Australia wide. Physical activity data was only collected for young and older adults (15 and over).
+
+Variables of interest are EXTYPLWA (Type of exercise undertaken for fitness, recreation, sport or to get to places in last week), EXFSRMIN (total number of minutes spent for fitness, recreation or sport in the last week, EXTRAMIN (walk for transport), EXFSRMIN (walk for sports), EXLWMMIN (total minutes moderate excercise), EXLWVMIN (total minutes vigorous excercise).
+
+Count the number of not applicable, not stated and did not undertake the type of excercise. Physical activity data is your people aged 15 years of age and older.
+
+```{r}
+
+value_99997 <- 99997 # 99997. Not applicable
+value_99998 <- 99998 # 99998. Not stated
+value_0 <- 0 # 0 did not undertake the type of excercise/not applicable
+value_1 <- 1 # 1 no exercise
+
+# rename variables
+
+pa_NHS <- pa_NHS %>% rename(walk_recreation_min=EXFSRMIN,
+                 walk_transport_min=EXTRAMIN,
+                 mod_excercise_min=EXLWMMIN,
+                 vig_excercise_min=EXLWVMIN)
+
+
+## Count people who reported not doing the PA type. 
+count_walk_recreation_min_0 <- sum(pa_NHS$walk_recreation_min == value_0, na.rm = TRUE)
+# 7867 people did not walk for recreation
+
+count_walk_transport_min_0 <- sum(pa_NHS$walk_transport_min == value_0, na.rm = TRUE)
+# 7743 people did not walk for transport
+
+count_mod_excercise_min_0 <- sum(pa_NHS$mod_excercise_min == value_0, na.rm = TRUE)
+#11640 people did not do moderate PA
+
+count_mod_vig_min_0 <- sum(pa_NHS$vig_excercise_min == value_0, na.rm = TRUE)
+#13054 people did not do moderate PA
+
+# count not applicable
+
+count_walk_recreation_min_99997 <- sum(pa_NHS$walk_recreation_min == value_99997, na.rm = TRUE)
+# 0
+count_walk_transport_min_99997 <- sum(pa_NHS$walk_transport_min == value_99997, na.rm = TRUE)
+#0
+count_mod_excercise_min_99997 <- sum(pa_NHS$mod_excercise_min == value_99997, na.rm = TRUE)
+#0
+count_mod_vig_min_99997 <- sum(pa_NHS$vig_excercise_min == value_99997, na.rm = TRUE)
+#0
+# count not stated
+
+count_walk_recreation_min_99998 <- sum(pa_NHS$walk_recreation_min == value_99998, na.rm = TRUE)
+# 10 not stated
+
+count_walk_transport_min_99998 <- sum(pa_NHS$walk_transport_min == value_99998, na.rm = TRUE)
+#45 not stated
+
+count_mod_excercise_min_99998 <- sum(pa_NHS$mod_excercise_min == value_99998, na.rm = TRUE)
+# 3 not stated
+
+count_vig_excercise_min_99998 <- sum(pa_NHS$vig_excercise_min == value_99998, na.rm = TRUE)
+# 0 not stated
+```
+
+### Distribution of mMET hours per week NHS
+
+```{r}
+  MMET_MOD <- 3.5 # As in meta analysis GArcia et al. 
+  MMET_VIG <- 7 # As in meta analysis GArcia et al. 
+  MMET_CYCLING <- 5.8 # From ithimr (check)
+  MMET_WALKING <- 2.5 # From ithimr (check)
+  
+## Clean data, cap values
+
+NHS_clean <- pa_NHS  %>%
+  # Replace NAs and specific values with 0
+  mutate_all(~ ifelse( . %in% c(99997, 99998), NA, .)) %>%
+  mutate(
+    walk_recreation_min = case_when(walk_recreation_min > 840 ~ 840, TRUE ~  walk_recreation_min),
+    walk_transport_min = case_when(walk_transport_min > 840 ~ 840, TRUE ~ walk_transport_min),
+    mod_excercise_min = case_when(mod_excercise_min > 840 ~ 840, TRUE ~ mod_excercise_min),
+    vig_excercise_min = case_when(vig_excercise_min > 840 ~ 840, TRUE ~ vig_excercise_min), ,
+    MODMINS = case_when(MODMINS > 840 ~ 840, TRUE ~ MODMINS),
+    VIGMINS = case_when(VIGMINS > 840 ~ 840, TRUE ~ VIGMINS))
+
+# ----- test 1 ----
+  
+### Only moderate and vigorous excersice  
+pa_NHS_1 <- NHS_clean %>%
+  mutate(mmet=walk_recreation_min/60* MMET_WALKING +
+                 walk_transport_min/60 * MMET_WALKING + mod_excercise_min/60 *    MMET_MOD + vig_excercise_min/60 * MMET_VIG)
+
+NHS_mmets_1 <- pa_NHS_1 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>% mutate(type="NHS: includes walking for transport, recreation and mod and vig exc")
+
+# ---- test 2 -----
+### All moderate and vigorous PA. These include: excersice aand workplace
+pa_NHS_2 <- NHS_clean %>%
+  mutate(mmet=walk_recreation_min/60* MMET_WALKING +
+                 walk_transport_min/60 * MMET_WALKING + MODMINS/60 *    MMET_MOD + VIGMINS/60 * MMET_VIG)
+
+NHS_mmets_2 <- pa_NHS_2 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>%  mutate(type="NHS: includes walking for transport, recreation and all mod and vig")
+
+
+compare_NHS <- bind_rows(NHS_mmets_1, NHS_mmets_2) 
+# all mod and vig includes PA at work. 
+
+```
+
+Results are low in comparison to MA-results, survey does not have domestic activities.
+
+## Victoria population health survey 2015-2019
+
+```{r}
+library(haven)
+library(dplyr)
+
+## ADD postcode and lga back
+# Read the data and select variables
+VPHS_2015 <- read_sav(paste0(getwd(),"/data/VPHS/VPHS 2015.sav")) %>% select(finlga, age, p5, f1:f10tot) %>% mutate(year=2015)
+VPHS_2016 <- read_sav(paste0(getwd(),"/data/VPHS/VPHS 2016.sav")) %>% select(finlga, age, p5, f1:f10tot) %>% mutate(year=2016)
+VPHS_2017 <- read_sav(paste0(getwd(),"/data/VPHS/VPHS 2017.sav")) %>% select(finlga, age, p5, f1:f10tot) %>% mutate(year=2017)
+VPHS_2018 <- read_sav(paste0(getwd(),"/data/VPHS/VPHS 2018.sav")) %>% select(finlga, age, p5, f1:f10tot) %>% mutate(year=2018)
+VPHS_2019 <- read_sav(paste0(getwd(),"/data/VPHS/VPHS 2019.sav")) %>% select(finlga, age, p5, f1:f10tot) %>% mutate(year=2019)
+
+
+VPHS <- bind_rows(VPHS_2015, VPHS_2016) %>% bind_rows(VPHS_2017) %>% bind_rows(VPHS_2018) %>% bind_rows(VPHS_2019) 
+
+
+```
+
+### Distribution of mMET hours per week VPHS
+
+Total time walking (f2tot), total time in minutes doing vigorous household chores (f4tot), total time in miuntes doing vigorous physical activity (f6tot), total time in minutes doing vigorous gardening (f12tot), and total time doing more moderate physical activity (F10tot)).
+
+For total time in minutes allowable range is 0 to 99. Don't know is recorded as 9999 and refused as 8888. First, check for each variable number of observations in 9999 and 8888.
+
+```{r}
+
+value_9999 <- 9999 # 9999. Dont know
+value_8888 <- 8888 # 8888. Refused
+
+
+## walking total
+
+count_walk_times_9999 <- sum(VPHS$f1 == value_9999, na.rm = TRUE)
+# 24 counts
+
+count_walk_times_8888 <- sum(VPHS$f1 == value_8888, na.rm = TRUE)
+# 1697 counts
+
+count_walk_total_9999 <- sum(VPHS$f2tot == value_9999, na.rm = TRUE)
+# 16 counts
+
+count_walk_total_8888 <- sum(VPHS$f2tot == value_8888, na.rm = TRUE)
+#2796 counts
+
+count_walk_total_NA <- sum(is.na(VPHS$f2tot))
+#7961
+
+## Vig hh chores
+
+count_hh_ch_times_9999 <- sum(VPHS$f3 == value_9999, na.rm = TRUE)
+# 33 counts
+
+count_hh_ch_times_8888 <- sum(VPHS$f3 == value_8888, na.rm = TRUE)
+# 1023 counts
+
+
+count_hh_ch_total_9999 <- sum(VPHS$f4tot == value_9999, na.rm = TRUE)
+# counts 190
+
+count_hh_ch_total_8888 <- sum(VPHS$f4tot == value_8888, na.rm = TRUE)
+# counts 538
+
+count_hh_ch_total_NA <- sum(is.na(VPHS$f4tot))
+# count 29167
+
+## Vig PA
+
+count_vig_pa_times_9999 <- sum(VPHS$f5 == value_9999, na.rm = TRUE)
+# 29 counts
+
+count_vig_pa_times_8888 <- sum(VPHS$f5 == value_8888, na.rm = TRUE)
+# 441 counts
+
+count_vig_pa_total_9999 <- sum(VPHS$f6tot == value_9999, na.rm = TRUE)
+# 83
+
+count_vig_pa_total_8888 <- sum(VPHS$f6tot == value_8888, na.rm = TRUE)
+# counts 154
+
+count_vig_pa_total_NA <- sum(is.na(VPHS$f6tot))
+#count 28997
+
+## Vig gardening
+
+count_vig_gard_times_9999 <- sum(VPHS$f11 == value_9999, na.rm = TRUE)
+# 26 counts
+
+count_vig_gard_times_8888 <- sum(VPHS$f11 == value_8888, na.rm = TRUE)
+# 388 counts
+
+count_vig_gard_total_9999 <- sum(VPHS$f12tot == value_9999, na.rm = TRUE)
+# 10
+
+count_vig_gard_total_8888 <- sum(VPHS$f12tot == value_8888, na.rm = TRUE)
+# counts 317
+
+count_vig_gard_total_NA <- sum(is.na(VPHS$f12tot))
+#count 29083
+
+# more moderate PA
+
+count_mod_times_9999 <- sum(VPHS$f10 == value_9999, na.rm = TRUE)
+# 4 counts
+
+count_mod_times_8888 <- sum(VPHS$f10 == value_8888, na.rm = TRUE)
+# 175 counts
+
+count_mod_total_9999 <- sum(VPHS$f10tot == value_9999, na.rm = TRUE)
+# 4
+
+count_mod_total_8888 <- sum(VPHS$f10tot == value_8888, na.rm = TRUE)
+# counts 175
+
+count_mod_total_NA <- sum(is.na(VPHS$f10tot))
+
+#count 37291
+
+## Calculate MMETs
+
+## Unlikely values
+### F1/F3/F11/F5/F9 >= 14, F2/F4/F12/F6/F10 >= 28 hours (same 1680 minutes)
+### Count unlikely values
+
+high_value <- 1680
+count_f2tot <- sum(VPHS$f10tot == high_value, na.rm = TRUE) 
+#266
+count_f4tot <- sum(VPHS$f4tot >= high_value, na.rm = TRUE)
+#256
+count_f6tot <- sum(VPHS$f6tot >= high_value, na.rm = TRUE)
+#286
+count_f12tot <- sum(VPHS$f12tot >= high_value, na.rm = TRUE)
+#389
+count_f10tot <- sum(VPHS$f10tot >= high_value, na.rm = TRUE)
+#266
+
+### Calculate MMETs
+
+
+  MMET_MOD <- 3.5 # As in meta analysis Garcia et al. 
+  MMET_VIG <- 7 # As in meta analysis Garcia et al. 
+  MMET_CYCLING <- 5.8 # From ithimr (check)
+  MMET_WALKING <- 2.5 # From ithimr (check)
+  
+  
+### Clean data
+## Briefly, use f1, f3, f5 only to identify those who did not engage in that level of physical activity
+## Use f2tot, f4tot, f6tot, f10tot, f12tot to determine the total time doing each level of activity.
+
+VPHS_clean <- VPHS %>%
+  # Replace with 0 for those identified as not doing the PA categories
+ mutate(f2tot = case_when(
+      f1 %in% c(7777, 8888, 9999) ~ 0,
+      f2 %in% c(7777, 8888, 9999) ~ 0,
+      TRUE ~ f2tot),  # Keep the original value if none of the conditions are met
+      f4tot=case_when(
+      f3 %in% c(7777, 8888, 9999) ~ 0, 
+      f4 %in% c(7777, 8888, 9999) ~ 0,
+      TRUE ~f4tot),
+      f6tot=case_when(
+      f5 %in% c(7777, 8888, 9999) ~ 0,
+      f6 %in% c(7777, 8888, 9999) ~ 0,
+      TRUE ~ f6tot), 
+      f10tot = case_when(
+      f9 %in% c(7777, 8888, 9999) ~ 0, 
+      f10 %in% c(7777, 8888, 9999) ~ 0,
+      TRUE ~ f10tot),
+      f12tot = case_when(
+      f11 %in% c(7777, 8888, 9999) ~ 0,
+      f12 %in% c(7777, 8888, 9999) ~ 0,
+      TRUE ~ f12tot)
+  ) %>% 
+  mutate(
+    f2tot = case_when(f2tot > 840 ~ 840, TRUE ~ f2tot),
+    f4tot = case_when(f4tot > 840 ~ 840, TRUE ~ f4tot),
+    f12tot = case_when(f12tot > 840 ~ 840, TRUE ~ f12tot),
+    f6tot = case_when(f6tot > 840 ~ 840, TRUE ~ f6tot),
+    f10tot = case_when(f10tot > 840 ~ 840, TRUE ~ f10tot), 
+    totalMin=f2tot + f4tot + f12tot + f6tot + f10tot, 
+    totalMinnohhgar=f2tot + f6tot + f10tot
+  )
+  
+# ----- Test 1) ------ 
+
+### Calculate mmets
+
+VPHS_1 <- VPHS_clean %>% mutate(mmet= f2tot/60* MMET_WALKING + f4tot/60 * MMET_VIG + f6tot/60 * MMET_VIG + f12tot/60 * MMET_VIG + f10tot/60 * MMET_MOD)
+
+### Create summary table
+mmets_1 <- VPHS_1 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>%
+  mutate(type="VPHS: Includes walking,  Vig PA, Vig gardening, Vig hh, mod PA")
+
+# ----- Test 2) ------ 
+# Include vig PA, mod PA and walking
+
+VPHS_2 <- VPHS_clean %>% mutate(mmet= f2tot/60* MMET_WALKING + f6tot/60 * MMET_VIG +  f10tot/60 * MMET_MOD)
+
+### Create summary table
+mmets_2 <- VPHS_2 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>%
+  mutate(type="VPHS: Includes walking,  Vig PA, mod PA")
+
+# ----- Test 3) ------ 
+
+# Remove outliers based on 1.5 times higher that 3rd quartile
+
+summary(VPHS_clean$f2tot)
+# Cap walking max minutes per week at 300*1.5 (consider outlier). 450 minutes
+
+summary(VPHS_clean$f4tot)
+# Cap hh chores max minutes per week at 138*1.5 (consider outlier). 207 minutes
+
+summary(VPHS_clean$f12tot)
+# Cap vig gardening max minutes per week at 180*1.5 (consider outlier). 270 minutes
+
+summary(VPHS_clean$f10tot)
+# Cap mod PA max minutes per week at 120*1.5 (consider outlier). 180 minutes
+
+summary(VPHS_clean$f6tot)
+# Cap vig PA max minutes per week at 180*1.5 (consider outlier). 270 minutes
+
+
+
+VPHS_3 <- VPHS_clean %>%
+  mutate(
+    f2tot = case_when(f2tot > 450 ~ 450, TRUE ~ f2tot),
+    f4tot = case_when(f4tot > 207 ~ 207, TRUE ~ f4tot),
+    f12tot = case_when(f12tot > 270 ~ 270, TRUE ~ f12tot),
+    f6tot = case_when(f6tot > 270 ~ 270, TRUE ~ f6tot),
+    f10tot = case_when(f10tot > 180 ~ 180, TRUE ~ f10tot)
+  )
+
+
+### Calculate mmets
+
+VPHS_3 <- VPHS_3 %>% mutate(mmet= f2tot/60* MMET_WALKING + f4tot/60 * MMET_VIG + f6tot/60 * MMET_VIG + f12tot/60 * MMET_VIG + f10tot/60 * MMET_MOD)
+
+### Create summary table
+mmets_3 <- VPHS_3 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>% mutate(type="VPHS: Mins over for all variables capped at max, and includes walking, vig hhs, vig gard, vig PA and mod PA")
+
+# ----- Test 4) ------ 
+# Remove max outliers and include walking, vig pa and mod pa
+
+### Calculate mmets
+
+VPHS_4 <- VPHS_clean %>%
+  mutate(
+    f2tot = case_when(f2tot > 450 ~ 450, TRUE ~ f2tot),
+    f4tot = case_when(f4tot > 207 ~ 207, TRUE ~ f4tot),
+    f12tot = case_when(f12tot > 270 ~ 270, TRUE ~ f12tot),
+    f6tot = case_when(f6tot > 270 ~ 270, TRUE ~ f6tot),
+    f10tot = case_when(f10tot > 180 ~ 180, TRUE ~ f10tot)
+  ) %>% mutate(mmet= f2tot/60* MMET_WALKING + f6tot/60 * MMET_VIG + f10tot/60 * MMET_MOD)
+
+### Create summary table
+mmets_4 <- VPHS_4 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>% mutate(type="VPHS: Mins over for all variables capped at max and includes walking, vig PA and mod PA")
+
+# ----- Test 5) ------ 
+# Remove max outliers and include walking, vig pa and mod pa, gardening and hhs and for NAs for f2tot, f6tot, and f10tot convert to 0. 
+
+### Calculate mmets
+
+VPHS_5 <- VPHS_clean %>%
+  mutate(
+    f2tot = case_when(is.na(f2tot) | f2tot > 450 ~ 0, TRUE ~ f2tot),
+    f6tot = case_when(is.na(f6tot) | f6tot > 270 ~ 0, TRUE ~ f6tot),
+    f10tot = case_when(is.na(f10tot) | f10tot > 180 ~ 0, TRUE ~ f10tot),
+    f4tot = case_when(is.na(f4tot) | f4tot > 207 ~ 0, TRUE ~ f4tot),
+    f12tot = case_when(is.na(f12tot) | f12tot > 270 ~ 0, TRUE ~ f12tot)
+  ) %>% 
+  mutate(mmet= f2tot/60* MMET_WALKING + f4tot/60 * MMET_VIG + f6tot/60 * MMET_VIG + f12tot/60 * MMET_VIG + f10tot/60 * MMET_MOD)
+
+
+### Create summary table
+mmets_5 <- VPHS_5 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>% mutate(type="VPHS: Mins over for all variables capped at max, NAs for time changed to 0 and includes walking, vig PA and mod PA, vig hh and vig gardening")
+
+# ----- Test 6) ------ 
+# Remove max outliers and include walking, vig pa and mod pa, and for NAs for f2tot, f6tot, and f10tot convert to 0. 
+
+### Calculate mmets
+
+VPHS_6 <- VPHS_clean %>%
+  mutate(
+    f2tot = case_when(is.na(f2tot) | f2tot > 450 ~ 0, TRUE ~ f2tot),
+    f6tot = case_when(is.na(f6tot) | f6tot > 270 ~ 0, TRUE ~ f6tot),
+    f10tot = case_when(is.na(f10tot) | f10tot > 180 ~ 0, TRUE ~ f10tot),
+    f4tot = case_when(is.na(f4tot) | f4tot > 207 ~ 0, TRUE ~ f4tot),
+    f12tot = case_when(is.na(f12tot) | f12tot > 270 ~ 0, TRUE ~ f12tot)
+  ) %>% 
+  mutate(mmet= f2tot/60* MMET_WALKING + f6tot/60 * MMET_VIG + f10tot/60 * MMET_MOD)
+
+
+### Create summary table
+mmets_6 <- VPHS_6 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>% mutate(type="VPHS: Mins over for all variables capped at max, NAs for time changed to 0 and includes walking, vig PA and mod PA")
+
+# ----- Test 7) ------ 
+# Remove max outliers and include walking, vig pa and mod pa adn vig household chores, and for NAs for f2tot, f6tot, and f10tot convert to 0. 
+
+### Calculate mmets
+
+VPHS_7 <- VPHS_clean %>%
+  mutate(
+    f2tot = case_when(is.na(f2tot) | f2tot > 450 ~ 0, TRUE ~ f2tot),
+    f6tot = case_when(is.na(f6tot) | f6tot > 270 ~ 0, TRUE ~ f6tot),
+    f10tot = case_when(is.na(f10tot) | f10tot > 180 ~ 0, TRUE ~ f10tot),
+    f4tot = case_when(is.na(f4tot) | f4tot > 207 ~ 0, TRUE ~ f4tot),
+    f12tot = case_when(is.na(f12tot) | f12tot > 270 ~ 0, TRUE ~ f12tot)
+  ) %>% 
+  mutate(mmet= f2tot/60* MMET_WALKING + f6tot/60 * MMET_VIG + f10tot/60 * MMET_MOD + f4tot/60 * MMET_VIG)
+
+
+### Create summary table
+mmets_7 <- VPHS_7 %>%
+  summarise(
+    min_mmet = min(mmet, na.rm = TRUE),
+    q1_mmet = quantile(mmet, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet, na.rm = TRUE),
+    mean_mmet = mean(mmet, na.rm = TRUE),
+    q3_mmet = quantile(mmet, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet, na.rm = TRUE)
+  ) %>% mutate(type="VPHS: Mins over for all variables capped at max, NAs for time changed to 0 and includes walking, vig PA and mod PA")
+
+compare_VPHS <- bind_rows(mmets_1, mmets_2, mmets_3, mmets_4, mmets_5, mmets_6, mmets_7)
+
+
+```
+
+## Compare results from NHS and VPHS
+
+The results below were produced with modified versions of the original data files. General data clean consisted of:
+
+-   NHS: not stated and not applicable were set to NAs and minutes for each PA category set to 840 minutes per week if higher.
+
+-   VPHS "don't know" and "refused" were set to 0, there were too many of them to set as NA, which then get dropped for summary calculations. In general, for each PA category set to 840 minutes per week if higher. Some calculations for mmets are based on a different max cap.
+
+```{r}
+
+library(knitr)
+mmets_compare_NHS_VPHS <- bind_rows(compare_NHS, compare_VPHS)
+
+knitr::kable(mmets_compare_NHS_VPHS, 
+             caption = "Marginal mets table compare",
+             format = "html", 
+             col.names = c("Min", "1st qrt", "Median", "Mean", "3rd qrt", "Max", "Decisions" ),
+             digits = 2)
+
+```
