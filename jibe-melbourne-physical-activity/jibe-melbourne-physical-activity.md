@@ -1,0 +1,115 @@
+# Modelling physical activity in Melbourne
+
+
+This Quarto markdown document is intended to contain code to predict
+physical activity for sport and recreation excluding walking and
+cycling, given explanatory variables (age, sex, SES, education, has car,
+etc) that align with the JIBE synthetic population data. This will be
+conducted to predict physical activity for residents of Melbourne,
+Australia, using the Australian Bureau of Statistics Australian National
+Health Survey data (2017-18).
+
+## Dependencies
+
+Analysis was conducted using R 4.4.1 using a Quarto markdown document
+(Quarto 1.5.55) in Positron IDE (2024.10.0), with renv 1.0.11 for
+package management.
+
+The following packages have been installed using renv:
+
+    renv::install(c('dplyr','haven','rmarkdown'))
+
+In principle, the R environment for this notebook should be able to be
+restored by running
+
+    renv::restore()
+
+Load libaries
+
+    library(dplyr)
+
+## Data
+
+[National Health
+Survey](https://www.abs.gov.au/statistics/microdata-tablebuilder/available-microdata-tablebuilder/national-health-survey)
+(NHS) data for 2017-18 were retrieved from the [Microdata
+Downloads](https://microdatadownload.abs.gov.au/MicrodataDownload/login.xhtml)
+section of the Australian Bureau of Statistics website on 3 December
+2024. ABS Microdata were accessed under the [ABS/Universities Australia
+Agreement
+(2024)](https://www.abs.gov.au/statistics/microdata-tablebuilder/absuniversities-australia-agreement)
+by Carl Higgs (RMIT University). The NHS Microdata data descriptions are
+available for download
+[here](https://www.abs.gov.au/statistics/microdata-tablebuilder/available-microdata-tablebuilder/national-health-survey#data-item-lists).
+
+NHS microdata are provided in CSV, SAS, SPSS, or Stata formats. The CSV
+data do not have labels, hence the `haven` package could be installed to
+read the labelled data in .dta (Stata) format. However, perhaps labels
+are not required — for now, CSV will be used to keep things simple.
+
+| File (csv, dta, etc) | Description                |
+|----------------------|----------------------------|
+| NHS17HHB             | Household level data       |
+| NHS17SPB             | Person level data          |
+| NHS17A3B             | Alcohol day level data     |
+| NHS17A4B             | Alcohol type level data    |
+| NHS17CNB             | Conditions level data      |
+| NHS17MDB             | Medications level data     |
+| NHS17HLB             | Health Literacy level data |
+
+ABS NHS 2017-18 Microdata files
+
+The household data contain geographic attributes and could potentially
+be used to restrict the sample, e.g. to residents of urban areas within
+Greater Melbourne. Sensitivity analysis could be conducted to evaluate
+the impact of this decision, e.g. relative to all persons and all
+persons living in Australian urban regions.
+
+Household variables of interest include:
+
+| Variable | Description | Comment |
+|----|----|----|
+| ABSHIDB | Household identifier | Link with persons |
+| GCCSA16 | Greater Capital City Statistical Area (ASGS 2016) | 1 == capital city |
+| SOS16 | Sections of State (ASGS 2016) | 0 == Major urban, 1 == Other urban (filter in c(0,1)) |
+| STATE16 | State or Territory (ASGS 2016) | 2 == Victoria |
+| DWSTQ02 | Dwelling structure | in case of use later |
+| HSTENURE | Tenure type of households | in case of use later |
+| SA1SF2DN | SEIFA - Index of Relative Socio-economic Disadvantage - 2016 - SA1 - Deciles - National |  |
+| GCDISTME | Median commuting distance (kms) |  |
+
+Note that there are also household geospatial indicators for
+supermarkets, amenities, fast food an public open space (any, and larger
+than 1 hecatare) within buffer distances of 400, 1000 and 1500 metres.
+
+Person variables of interest (see data dictionaries for detailed codes)
+include:
+
+| Variable | Description | Comment |
+|----|----|----|
+| ABSPID | Person identifier | Need to verify that this is unique within households |
+| ABSHIDB | Household identifier | Link with households |
+| AGE99 | Age of person |  |
+| SEX | Sex of person | 1==Male, 2==Female |
+| HIGHLVL | Level of highest educational attainment | 0==NA, 1==Postgraduate, … 13==Never attended school |
+| EMPSTAT | Labour force full-time/part-time status | 0==NA, 1==Employed full time … 6 Not in labour force |
+| … | other variables | more to add |
+
+``` r
+data_dir <- '/Users/E33390/Library/CloudStorage/OneDrive-RMITUniversity/projects/abs/microdata/NHS2017-18_CSV/NHS2017-18_CSV/'
+data <- list(
+    households = read.csv(paste0(data_dir,'NHS17HHB.csv')),
+    persons = read.csv(paste0(data_dir,'NHS17SPB.csv'))
+)
+```
+
+``` r
+nhs <- merge(
+        x = data$households,
+            # select(c("ABSHIDB",'')) %>%
+            # filter() for Victoria GCCSA (i.e. Melbourne) urban regions 
+        y = data$persons, 
+        by = "ABSHIDB", 
+        all.x = TRUE
+    )
+```
