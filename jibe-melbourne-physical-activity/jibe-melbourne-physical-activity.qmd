@@ -94,24 +94,24 @@ data <- list(
 #| output: true
 
 nhs <- left_join(
-            data$households,
-                # %>% as.data.frame(), 
-                # select(
-                #     c( 
-                #         "GCCSA16", 
-                #         "SOS16",
-                #         "STATE16", 
-                #         "DWSTQ02",
-                #         "HSTENURE",
-                #         "SA1SF2DN", 
-                #         "GCDISTME"
-                #     )
-                # ) %>% 
-                # filter(
-                #     STATE16==2 &
+            data$households %>% 
+                select(
+                    c( 
+                        "ABSHIDB",
+                        # "GCCSA16", 
+                        # "SOS16",
+                        "STATE16", 
+                        "DWLSTRBC",
+                        "TENUREC",
+                        "SA1SF2DN", 
+                        # "GCDISTME"
+                    )
+                )
+                %>%  filter(
+                    STATE16==2
                 #     GCCSA16==1 &
                 #     SOS16 %in% c(0,1)
-                # ), # for Victoria GCCSA (i.e. Melbourne) urban regions 
+                ), # for Victoria GCCSA (i.e. Melbourne) urban regions 
             data$persons %>% 
                 select(
                     c(
@@ -120,11 +120,30 @@ nhs <- left_join(
                         "AGEB",
                         "SEX",
                         "HIGHLVBC",
-                        "EMPTYPE"
+                        "EMPTYPE",
+                        "EXLWNO",
+                        "EXLWKTNO",
+                        "EXLWTIME",
+                        "EXTRAMIN"
                     )
+                ) %>%
+                filter(
+                    EXLWNO != 997 & 
+                    EXLWNO != 998 & 
+                    EXLWKTNO != 997 & 
+                    EXLWKTNO != 998 & 
+                    EXLWTIME < 1440 &
+                    EXTRAMIN < 1440 
                 ), 
         by = "ABSHIDB"
         ) 
-
+nhs['_exercise_times_excl_walking'] <- nhs$EXLWNO - nhs$EXLWKTNO
+nhs['_exercise_mins_excl_walking'] <- nhs$EXLWTIME - nhs$EXTRAMIN
 nhs %>% summary()
 ```
+
+So, geographic variables are not available in the downloadable microdata; perhaps accessible only in DataLab (requires extra approval for usage).  Likewise the discrete age variable (AGE99), instead the equivalent is 'AGEB', presumably 5-year age bands (ranges from 1 to 19, so multiplied by 5 is 0-5 to 90-95+, perhaps although ideally a data dictionary could be located to confirm).  Highest level of educational attainment and employment type variables also differ and will need to be understood.  But really, should arrange access to DataLab.
+
+The maximum values for time spent doing exercise (3420 and 2400 minutes) are not realistic (57 and 40 hours); these should be excluded.  This could be achieved by taking less than 24*60 = 1440 minutes.  A day of exercise is still unrealistic, but a limit must be drawn somewhere. (an empiric estimate of 99th percentile could be another approach)
+
+Also --- should really do the above working off Belen's existing codebook that has cleaning code already specified and contains the full logic looking at moderate vs vigorous pa
