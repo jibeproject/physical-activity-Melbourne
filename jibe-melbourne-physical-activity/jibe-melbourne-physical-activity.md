@@ -26,7 +26,9 @@ restored by running
 
 Load libaries
 
-    library(dplyr)
+``` r
+library(dplyr)
+```
 
 ## Data
 
@@ -105,11 +107,38 @@ data <- list(
 
 ``` r
 nhs <- merge(
-        x = data$households,
-            # select(c("ABSHIDB",'')) %>%
-            # filter() for Victoria GCCSA (i.e. Melbourne) urban regions 
-        y = data$persons, 
+        x = data$households %>% as.data.frame(), 
+                # select(
+                #     c( 
+                #         "GCCSA16", 
+                #         "SOS16",
+                #         "STATE16", 
+                #         "DWSTQ02",
+                #         "HSTENURE",
+                #         "SA1SF2DN", 
+                #         "GCDISTME"
+                #     )
+                # ) %>% 
+                # filter(
+                #     STATE16==2 &
+                #     GCCSA16==1 &
+                #     SOS16 %in% c(0,1)
+                # ), # for Victoria GCCSA (i.e. Melbourne) urban regions 
+        y = data$persons %>% as.data.frame(),
+                # select(
+                #     c(
+                #         "ABSPID",
+                #         "ABSHIDB",
+                #         "AGE99",
+                #         "SEX",
+                #         "HIGHLVL",
+                #         "EMPSTAT"
+                #     )
+                # ), 
         by = "ABSHIDB", 
         all.x = TRUE
     )
+
+nhs %>% summarise()
+## data frame with 0 columns and 1 row
 ```
