@@ -93,8 +93,9 @@ data <- list(
 ```{r}
 #| output: true
 
-nhs <- merge(
-        x = data$households %>% as.data.frame(), 
+nhs <- left_join(
+            data$households,
+                # %>% as.data.frame(), 
                 # select(
                 #     c( 
                 #         "GCCSA16", 
@@ -111,20 +112,19 @@ nhs <- merge(
                 #     GCCSA16==1 &
                 #     SOS16 %in% c(0,1)
                 # ), # for Victoria GCCSA (i.e. Melbourne) urban regions 
-        y = data$persons %>% as.data.frame(),
-                # select(
-                #     c(
-                #         "ABSPID",
-                #         "ABSHIDB",
-                #         "AGE99",
-                #         "SEX",
-                #         "HIGHLVL",
-                #         "EMPSTAT"
-                #     )
-                # ), 
-        by = "ABSHIDB", 
-        all.x = TRUE
-    )
+            data$persons %>% 
+                select(
+                    c(
+                        "ABSPID",
+                        "ABSHIDB",
+                        "AGEB",
+                        "SEX",
+                        "HIGHLVBC",
+                        "EMPTYPE"
+                    )
+                ), 
+        by = "ABSHIDB"
+        ) 
 
-nhs %>% summarise()
+nhs %>% summary()
 ```

@@ -106,8 +106,9 @@ data <- list(
 ```
 
 ``` r
-nhs <- merge(
-        x = data$households %>% as.data.frame(), 
+nhs <- left_join(
+            data$households,
+                # %>% as.data.frame(), 
                 # select(
                 #     c( 
                 #         "GCCSA16", 
@@ -124,21 +125,180 @@ nhs <- merge(
                 #     GCCSA16==1 &
                 #     SOS16 %in% c(0,1)
                 # ), # for Victoria GCCSA (i.e. Melbourne) urban regions 
-        y = data$persons %>% as.data.frame(),
-                # select(
-                #     c(
-                #         "ABSPID",
-                #         "ABSHIDB",
-                #         "AGE99",
-                #         "SEX",
-                #         "HIGHLVL",
-                #         "EMPSTAT"
-                #     )
-                # ), 
-        by = "ABSHIDB", 
-        all.x = TRUE
-    )
+            data$persons %>% 
+                select(
+                    c(
+                        "ABSPID",
+                        "ABSHIDB",
+                        "AGEB",
+                        "SEX",
+                        "HIGHLVBC",
+                        "EMPTYPE"
+                    )
+                ), 
+        by = "ABSHIDB"
+        ) 
 
-nhs %>% summarise()
-## data frame with 0 columns and 1 row
+nhs %>% summary()
+##      LEVEL1    ABSHIDB             ABSPID.x     ABSDID      ABSTID      ABSCID 
+##  Min.   :1   Length:21315       Min.   :0   Min.   :0   Min.   :0   Min.   :0  
+##  1st Qu.:1   Class :character   1st Qu.:0   1st Qu.:0   1st Qu.:0   1st Qu.:0  
+##  Median :1   Mode  :character   Median :0   Median :0   Median :0   Median :0  
+##  Mean   :1                      Mean   :0   Mean   :0   Mean   :0   Mean   :0  
+##  3rd Qu.:1                      3rd Qu.:0   3rd Qu.:0   3rd Qu.:0   3rd Qu.:0  
+##  Max.   :1                      Max.   :0   Max.   :0   Max.   :0   Max.   :0  
+##      ABSMID      ABSLID     HHADULBC        HHCO14BC         NUMKHHBC    
+##  Min.   :0   Min.   :0   Min.   :1.000   Min.   :0.0000   Min.   :0.000  
+##  1st Qu.:0   1st Qu.:0   1st Qu.:1.000   1st Qu.:0.0000   1st Qu.:0.000  
+##  Median :0   Median :0   Median :2.000   Median :0.0000   Median :0.000  
+##  Mean   :0   Mean   :0   Mean   :1.846   Mean   :0.7115   Mean   :0.834  
+##  3rd Qu.:0   3rd Qu.:0   3rd Qu.:2.000   3rd Qu.:1.0000   3rd Qu.:2.000  
+##  Max.   :0   Max.   :0   Max.   :3.000   Max.   :3.0000   Max.   :3.000  
+##     NUMPERBC        HH15OVBC        STHHTYC         SMKHSQ4      
+##  Min.   :1.000   Min.   :1.000   Min.   :1.000   Min.   :0.0000  
+##  1st Qu.:2.000   1st Qu.:1.000   1st Qu.:1.000   1st Qu.:0.0000  
+##  Median :3.000   Median :2.000   Median :1.000   Median :0.0000  
+##  Mean   :2.751   Mean   :1.927   Mean   :1.778   Mean   :0.9095  
+##  3rd Qu.:4.000   3rd Qu.:2.000   3rd Qu.:3.000   3rd Qu.:0.0000  
+##  Max.   :6.000   Max.   :3.000   Max.   :5.000   Max.   :8.0000  
+##     DSMKHHRB          DSMKHH         INCDECU1        TENUREC     
+##  Min.   :0.0000   Min.   :1.000   Min.   : 1.00   Min.   :1.000  
+##  1st Qu.:0.0000   1st Qu.:5.000   1st Qu.: 4.00   1st Qu.:1.000  
+##  Median :0.0000   Median :5.000   Median : 6.00   Median :2.000  
+##  Mean   :0.3713   Mean   :4.199   Mean   :18.02   Mean   :2.142  
+##  3rd Qu.:0.0000   3rd Qu.:5.000   3rd Qu.: 9.00   3rd Qu.:3.000  
+##  Max.   :8.0000   Max.   :8.000   Max.   :99.00   Max.   :5.000  
+##     LNDLORDB         DWLSTRBC        NUMRMSBC        LANDLINE    
+##  Min.   :0.0000   Min.   :1.000   Min.   :0.000   Min.   :1.000  
+##  1st Qu.:0.0000   1st Qu.:1.000   1st Qu.:3.000   1st Qu.:1.000  
+##  Median :0.0000   Median :1.000   Median :3.000   Median :3.000  
+##  Mean   :0.3836   Mean   :1.515   Mean   :3.282   Mean   :2.756  
+##  3rd Qu.:1.0000   3rd Qu.:1.000   3rd Qu.:4.000   3rd Qu.:4.000  
+##  Max.   :3.0000   Max.   :8.000   Max.   :8.000   Max.   :8.000  
+##     HHMOBILE        SA1SF2DN         STATE16        ARIABC16    
+##  Min.   :1.000   Min.   : 1.000   Min.   :1.00   Min.   :1.000  
+##  1st Qu.:2.000   1st Qu.: 3.000   1st Qu.:2.00   1st Qu.:1.000  
+##  Median :2.000   Median : 6.000   Median :3.00   Median :1.000  
+##  Mean   :2.245   Mean   : 5.499   Mean   :3.65   Mean   :1.564  
+##  3rd Qu.:2.000   3rd Qu.: 8.000   3rd Qu.:5.00   3rd Qu.:2.000  
+##  Max.   :8.000   Max.   :10.000   Max.   :8.00   Max.   :3.000  
+##     NHSHHWT           WHHOR01          WHHOR02          WHHOR03      
+##  Min.   :  20.57   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 289.25   1st Qu.: 195.3   1st Qu.: 203.8   1st Qu.: 197.1  
+##  Median : 558.25   Median : 548.2   Median : 551.6   Median : 558.4  
+##  Mean   : 574.47   Mean   : 574.2   Mean   : 574.4   Mean   : 574.4  
+##  3rd Qu.: 839.16   3rd Qu.: 843.8   3rd Qu.: 832.3   3rd Qu.: 843.6  
+##  Max.   :2280.67   Max.   :2280.7   Max.   :2280.7   Max.   :2460.2  
+##     WHHOR04          WHHOR05          WHHOR06          WHHOR07      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 195.2   1st Qu.: 206.8   1st Qu.: 207.2   1st Qu.: 206.7  
+##  Median : 550.3   Median : 554.2   Median : 558.3   Median : 555.0  
+##  Mean   : 574.4   Mean   : 574.5   Mean   : 574.5   Mean   : 574.4  
+##  3rd Qu.: 839.1   3rd Qu.: 836.9   3rd Qu.: 846.9   3rd Qu.: 847.5  
+##  Max.   :2280.7   Max.   :2333.2   Max.   :2333.2   Max.   :2280.7  
+##     WHHOR08          WHHOR09          WHHOR10          WHHOR11      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 203.8   1st Qu.: 197.3   1st Qu.: 197.3   1st Qu.: 202.6  
+##  Median : 547.7   Median : 551.6   Median : 554.4   Median : 562.0  
+##  Mean   : 574.5   Mean   : 574.6   Mean   : 574.4   Mean   : 574.4  
+##  3rd Qu.: 838.6   3rd Qu.: 844.9   3rd Qu.: 842.7   3rd Qu.: 844.6  
+##  Max.   :2388.2   Max.   :2280.7   Max.   :2388.2   Max.   :2280.7  
+##     WHHOR12          WHHOR13          WHHOR14          WHHOR15      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 204.5   1st Qu.: 206.9   1st Qu.: 197.3   1st Qu.: 204.6  
+##  Median : 554.4   Median : 558.2   Median : 554.2   Median : 551.5  
+##  Mean   : 574.4   Mean   : 574.4   Mean   : 574.6   Mean   : 574.3  
+##  3rd Qu.: 842.4   3rd Qu.: 835.2   3rd Qu.: 851.1   3rd Qu.: 841.8  
+##  Max.   :2280.7   Max.   :2333.2   Max.   :2460.2   Max.   :2280.7  
+##     WHHOR16          WHHOR17          WHHOR18          WHHOR19      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 195.0   1st Qu.: 203.8   1st Qu.: 195.2   1st Qu.: 195.3  
+##  Median : 554.5   Median : 552.9   Median : 558.0   Median : 556.5  
+##  Mean   : 574.3   Mean   : 574.6   Mean   : 574.5   Mean   : 574.5  
+##  3rd Qu.: 838.3   3rd Qu.: 842.0   3rd Qu.: 835.1   3rd Qu.: 838.1  
+##  Max.   :2333.2   Max.   :2280.7   Max.   :2280.7   Max.   :2280.7  
+##     WHHOR20          WHHOR21          WHHOR22          WHHOR23      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 195.4   1st Qu.: 200.0   1st Qu.: 204.5   1st Qu.: 196.8  
+##  Median : 555.5   Median : 559.7   Median : 560.3   Median : 564.2  
+##  Mean   : 574.2   Mean   : 574.5   Mean   : 574.6   Mean   : 574.5  
+##  3rd Qu.: 845.0   3rd Qu.: 846.8   3rd Qu.: 839.5   3rd Qu.: 835.8  
+##  Max.   :2332.9   Max.   :2332.9   Max.   :2280.7   Max.   :2280.7  
+##     WHHOR24          WHHOR25          WHHOR26          WHHOR27      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 201.9   1st Qu.: 201.9   1st Qu.: 206.8   1st Qu.: 197.7  
+##  Median : 557.6   Median : 553.1   Median : 552.9   Median : 555.5  
+##  Mean   : 574.6   Mean   : 574.4   Mean   : 574.5   Mean   : 574.4  
+##  3rd Qu.: 842.5   3rd Qu.: 841.8   3rd Qu.: 842.2   3rd Qu.: 832.1  
+##  Max.   :2280.7   Max.   :2280.7   Max.   :2401.8   Max.   :2280.7  
+##     WHHOR28          WHHOR29          WHHOR30          WHHOR31      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 199.5   1st Qu.: 193.8   1st Qu.: 199.7   1st Qu.: 205.0  
+##  Median : 554.4   Median : 558.4   Median : 551.7   Median : 558.5  
+##  Mean   : 574.3   Mean   : 574.7   Mean   : 574.5   Mean   : 574.4  
+##  3rd Qu.: 839.9   3rd Qu.: 836.0   3rd Qu.: 842.3   3rd Qu.: 828.5  
+##  Max.   :2280.7   Max.   :2333.2   Max.   :2280.7   Max.   :2280.7  
+##     WHHOR32          WHHOR33          WHHOR34          WHHOR35      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 195.4   1st Qu.: 211.7   1st Qu.: 205.5   1st Qu.: 202.5  
+##  Median : 554.3   Median : 553.0   Median : 553.0   Median : 558.8  
+##  Mean   : 574.7   Mean   : 574.5   Mean   : 574.5   Mean   : 574.6  
+##  3rd Qu.: 831.7   3rd Qu.: 841.0   3rd Qu.: 837.1   3rd Qu.: 853.6  
+##  Max.   :2333.2   Max.   :2280.7   Max.   :2333.2   Max.   :2388.2  
+##     WHHOR36          WHHOR37          WHHOR38          WHHOR39      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 207.6   1st Qu.: 202.3   1st Qu.: 206.0   1st Qu.: 198.0  
+##  Median : 555.0   Median : 551.7   Median : 553.3   Median : 551.5  
+##  Mean   : 574.5   Mean   : 574.6   Mean   : 574.5   Mean   : 574.3  
+##  3rd Qu.: 839.5   3rd Qu.: 842.1   3rd Qu.: 840.1   3rd Qu.: 837.0  
+##  Max.   :2280.7   Max.   :2333.2   Max.   :2346.2   Max.   :2280.7  
+##     WHHOR40          WHHOR41          WHHOR42          WHHOR43      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 206.7   1st Qu.: 204.5   1st Qu.: 204.6   1st Qu.: 203.8  
+##  Median : 550.5   Median : 554.2   Median : 561.6   Median : 557.2  
+##  Mean   : 574.6   Mean   : 574.5   Mean   : 574.5   Mean   : 574.3  
+##  3rd Qu.: 845.8   3rd Qu.: 838.3   3rd Qu.: 850.0   3rd Qu.: 846.3  
+##  Max.   :2445.9   Max.   :2387.9   Max.   :2280.7   Max.   :2280.7  
+##     WHHOR44          WHHOR45          WHHOR46          WHHOR47      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 205.2   1st Qu.: 197.1   1st Qu.: 206.4   1st Qu.: 203.1  
+##  Median : 551.8   Median : 553.0   Median : 558.2   Median : 557.2  
+##  Mean   : 574.6   Mean   : 574.3   Mean   : 574.3   Mean   : 574.6  
+##  3rd Qu.: 850.6   3rd Qu.: 847.7   3rd Qu.: 837.8   3rd Qu.: 838.1  
+##  Max.   :2280.7   Max.   :2401.5   Max.   :2280.7   Max.   :2333.2  
+##     WHHOR48          WHHOR49          WHHOR50          WHHOR51      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 206.6   1st Qu.: 207.7   1st Qu.: 203.7   1st Qu.: 206.8  
+##  Median : 555.2   Median : 551.7   Median : 551.6   Median : 554.1  
+##  Mean   : 574.4   Mean   : 574.6   Mean   : 574.6   Mean   : 574.3  
+##  3rd Qu.: 836.9   3rd Qu.: 841.4   3rd Qu.: 841.2   3rd Qu.: 837.1  
+##  Max.   :2280.7   Max.   :2280.7   Max.   :2388.2   Max.   :2388.2  
+##     WHHOR52          WHHOR53          WHHOR54          WHHOR55      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 204.4   1st Qu.: 216.3   1st Qu.: 205.7   1st Qu.: 195.2  
+##  Median : 554.5   Median : 555.2   Median : 551.6   Median : 558.7  
+##  Mean   : 574.5   Mean   : 574.6   Mean   : 574.5   Mean   : 574.4  
+##  3rd Qu.: 842.7   3rd Qu.: 833.0   3rd Qu.: 835.1   3rd Qu.: 842.7  
+##  Max.   :2280.7   Max.   :2333.2   Max.   :2280.7   Max.   :2401.5  
+##     WHHOR56          WHHOR57          WHHOR58          WHHOR59      
+##  Min.   :   0.0   Min.   :   0.0   Min.   :   0.0   Min.   :   0.0  
+##  1st Qu.: 210.1   1st Qu.: 204.6   1st Qu.: 198.0   1st Qu.: 202.4  
+##  Median : 555.7   Median : 558.5   Median : 554.5   Median : 556.2  
+##  Mean   : 574.6   Mean   : 574.2   Mean   : 574.6   Mean   : 574.6  
+##  3rd Qu.: 841.1   3rd Qu.: 851.1   3rd Qu.: 843.4   3rd Qu.: 844.4  
+##  Max.   :2280.7   Max.   :2333.2   Max.   :2280.7   Max.   :2333.2  
+##     WHHOR60          ABSPID.y          AGEB             SEX       
+##  Min.   :   0.0   Min.   :1.000   Min.   : 1.000   Min.   :1.000  
+##  1st Qu.: 203.6   1st Qu.:1.000   1st Qu.: 6.000   1st Qu.:1.000  
+##  Median : 555.5   Median :1.000   Median :10.000   Median :2.000  
+##  Mean   : 574.3   Mean   :1.232   Mean   : 9.532   Mean   :1.527  
+##  3rd Qu.: 847.2   3rd Qu.:1.000   3rd Qu.:14.000   3rd Qu.:2.000  
+##  Max.   :2333.2   Max.   :2.000   Max.   :19.000   Max.   :2.000  
+##     HIGHLVBC         EMPTYPE      
+##  Min.   : 0.000   Min.   :0.0000  
+##  1st Qu.: 1.000   1st Qu.:0.0000  
+##  Median : 4.000   Median :0.0000  
+##  Mean   : 3.768   Mean   :0.7188  
+##  3rd Qu.: 6.000   3rd Qu.:1.0000  
+##  Max.   :12.000   Max.   :6.0000
 ```
