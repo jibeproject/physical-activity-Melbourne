@@ -35,6 +35,7 @@ Load libaries
 library(dplyr)
 library(vtable)
 library(corrplot)
+library(ggplot2)
 ```
 
 ## Data
@@ -465,7 +466,7 @@ pa_data =pa_data%>%
 pa_data_over0=pa_data[pa_data$mmet_hours_per_week>0,]
 ```
 
-### Models
+### Modelling
 
 The modelling approach (and earlier data preparation) draws on code from
 the Manchester physical activity modelling R code file
@@ -488,7 +489,7 @@ MonteCarlo_otherSport <- function(model, data,facetVar = NA) {
 }
 ```
 
-#### Predicting mMETS hours/week
+#### Modelling mMETS hours/week
 
 ``` r
 m.otherSport <- list()
@@ -650,7 +651,7 @@ summary(m.otherSport$linear)
 ## F-statistic: 19.09 on 32 and 12901 DF,  p-value: < 2.2e-16
 ```
 
-#### Predicting zero mMETS hours/week
+#### Modelling zero mMETS hours/week
 
 ``` r
 m.otherSport$zeroModel <- glm(mmet_hours_per_week_zero ~ SEX+AGEB+LFSBC+HIGHLVBC+SA1SF2DN,
@@ -812,9 +813,9 @@ summary(m.otherSport$zeroModel)
 ## Number of Fisher Scoring iterations: 5
 ```
 
-#### Predictions
+#### Modelling outputs
 
-First we save the model
+Save the model outputs for usage later
 
 ``` r
 # Get today's date
@@ -829,37 +830,141 @@ prediction=MonteCarlo_otherSport(m.otherSport$zeroModel,m.otherSport$zeroModel$d
 confusion=prediction%>%group_by(mmet_hours_per_week_zero,zeroPrediction)%>%count()
 ```
 
-######################## 2. Apply to SP
+### Predicting mMET hours/week for synthetic population
 
-pp=read_csv(“manchester/synPop/sp_2021/pp_health_2021_withIMD.csv”)
+To predict mMETs for the synthetic population, we need to understand how
+the variables are structured and ensure that our model (defined above)
+has a comparable structure. We’ll load up the data and consider a
+summary of variables to better understand this.
 
-data = pp%\>% mutate(female=ifelse(gender==2,1,0),
-workstat4=case_when(occupation==1 ~ “Employed”, occupation==2 ~
-“Unemployed”, occupation==3 ~ “Student”, occupation==4 ~ “Retired”),
-workstat3 = case_when(workstat4 == “Employed” \| workstat4 ==
-“Unemployed” ~ “Employed_unemployed”, workstat4 == “Student” ~
-“Student”, workstat4 == “Retired” ~ “Retired”), age_group = case_when(
-age \>= 16 & age \< 25 ~ “16-24”, age \>= 25 & age \< 35 ~ “25-34”, age
-\>= 35 & age \< 45 ~ “35-44”, age \>= 45 & age \< 55 ~ “45-54”, age \>=
-55 & age \< 65 ~ “55-64”, age \>= 65 & age \< 75 ~ “65-74”, TRUE ~
-“75+”))%\>% select(id,age_group,female,workstat4,workstat3,imd10)
-prediction=MonteCarlo_otherSport(m.otherSport$zeroModel,data)
-table(prediction$zeroPrediction)
+``` r
+pp=readRDS("../../../melbourne/synthetic_population/population_final.rds")
+pp %>% st(out='kable')
+```
 
-nonzeroPP=prediction%\>%filter(!zeroPrediction)
-nonzeroPP_predict=nonzeroPP%\>%mutate(wkhrPrediction=predict.lm(m.otherSport\$linear,nonzeroPP))
-nonzeroPP_predict=nonzeroPP_predict%\>%mutate(otherSport_wkhr=pmax(0,wkhrPrediction))
-pp=pp%\>%left_join(nonzeroPP_predict%\>%select(id,otherSport_wkhr))
-pp\[is.na(pp)\] \<- 0
+| Variable | N | Mean | Std. Dev. | Min | Pctl. 25 | Pctl. 75 | Max |
+|:---|:---|:---|:---|:---|:---|:---|:---|
+| AgentId | 4174097 | 2087049 | 1204958 | 1 | 1043525 | 3130573 | 4174097 |
+| Age | 4174097 | 37 | 22 | -1 | 19 | 53 | 104 |
+| Gender | 4174097 |  |  |  |  |  |  |
+| … Female | 2128562 | 51% |  |  |  |  |  |
+| … Male | 2045535 | 49% |  |  |  |  |  |
+| RelationshipStatus | 4174097 |  |  |  |  |  |  |
+| … GROUP_HOUSEHOLD | 202422 | 5% |  |  |  |  |  |
+| … LONE_PARENT | 176081 | 4% |  |  |  |  |  |
+| … LONE_PERSON | 366024 | 9% |  |  |  |  |  |
+| … MARRIED | 1918556 | 46% |  |  |  |  |  |
+| … O15_CHILD | 285971 | 7% |  |  |  |  |  |
+| … RELATIVE | 133914 | 3% |  |  |  |  |  |
+| … STUDENT | 264158 | 6% |  |  |  |  |  |
+| … U15_CHILD | 826971 | 20% |  |  |  |  |  |
+| HouseholdId | 4174097 | 1057931 | 432171 | 1 | 797012 | 1370237 | 1837719 |
+| PartnerId | 1918556 | 2097046 | 1206587 | 2469 | 1061171 | 3141437 | 4174097 |
+| MotherId | 1323492 | 2095777 | 1204385 | 4563 | 1056389 | 3131546 | 4174092 |
+| FatherId | 1125454 | 2096707 | 1205114 | 4567 | 1056012 | 3128035 | 4174091 |
+| SA2_MAINCODE | 4174097 | 210185213 | 2543207 | 206011105 | 208021180 | 212051322 | 214021385 |
+| SA1_7DIGCODE | 4174097 | 2127554 | 10350 | 2110501 | 2118307 | 2135504 | 2146828 |
+| SA1_MAINCODE_2016 | 4174097 | 21018521345 | 254320731 | 20601110501 | 20802118008 | 21205132223 | 21402138547 |
+| age_cat | 4174097 | 7.9 | 4.4 | 1 | 4 | 11 | 21 |
+| is_employed | 4174097 |  |  |  |  |  |  |
+| … No | 2209464 | 53% |  |  |  |  |  |
+| … Yes | 1964633 | 47% |  |  |  |  |  |
+| education | 4174097 |  |  |  |  |  |  |
+| … high | 1036035 | 25% |  |  |  |  |  |
+| … low | 1148285 | 28% |  |  |  |  |  |
+| … medium | 1989777 | 48% |  |  |  |  |  |
+| IRSAD | 4174097 | 6.2 | 2.7 | -1 | 4 | 8 | 11 |
+| hhSize | 4174097 | 3.1 | 1.5 | 1 | 2 | 4 | 8 |
+| hhCar | 4174097 | 1.8 | 1 | 0 | 1 | 2 | 4 |
 
-pp=pp%\>%mutate(mmetHr_otherSport=otherSport_wkhr\*3,
-mmetHr_total=mmetHr_cycle+mmetHr_walk+mmetHr_otherSport)
+Summary Statistics
 
-write_csv(pp,“manchester/physicalActivity/pp_health_2021_withOtherSport.csv”)
+Considering the above, I think the following points are worth
+considering as model refinements:
 
-summary(pp\$mmetHr_total) ggplot(pp)+stat_ecdf(aes(x=mmetHr_total))
+#### Represent age in years
 
-######################## PRINT COEFs
+(e.g. using bracket mid-point) as “Age”. This would better model age as
+a continuous variable, for direct prediction using the synthetic
+population. A caveat to that would be consideration of whether age is
+better modelled as linearly (a more parsimonious approach) or
+non-linearly (which its current treatment as a factor variable allows
+for, but complicates things and doesn’t directly translate to the
+synthetic population variable that is continuous age in years).
 
-coef(m.otherSport$zeroinfl)
-coef(m.otherSport$zeroinfl, model = “count”) \`\`\`
+mMET hours per week by age backet – there may be some non-linearity
+(e.g. 18-19 year olds median METS are lower, but perhaps not
+meaningfully so), but broadly, younger people have higher mMETs:
+
+``` r
+ggplot(pa_data,aes(x=AGEB, y=mmet_hours_per_week)) + geom_boxplot() + coord_flip()
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/unnamed-chunk-14-1.png)
+
+- on the other hand, there is an `age_cat` variable, however I think the
+  model would have more power if age could be modelled as continuous.
+  Having said that it will be good to consult with Belen and Qin to get
+  their recommendations and plans for usage.
+- Represent gender using data labels as “Gender”. Currently the sex
+  variable is a factor variable with numbers 1 and 2. The Gender
+  variable is categorical with string values for “Male” and “Female”.
+  May be best to at least change it to binary indicator ‘female’ having
+  0 (male) and 1 (female)
+- Simplify employment as a binary variable “is_employed” with values of
+  ‘No’ and ‘Yes’. This would be most transparent using value 0 for now
+  and 1 for yes. But how does one treat a student, are they employed?
+- Simplify education as a three level variable education, having values
+  ‘low’, ‘medium’, ‘high’. While it might be that this could be
+  represented as a pseudo continuous variable (0, 1, 2), I think its
+  best to not assume its linear and leave it as a categorical factor
+  variable.
+- There is a variable ‘IRSAD’ that might be disadvantage but it ranges
+  from -1 to 11, so is not clear what this represents (not simply
+  deciles, and not quintiles)
+- hhSize is present in synthetic population, but it may not be
+  conceptually relevant
+- hhCar is in synethic population, but there is no data to represent
+  this in the NHS data, that I can see.
+
+<!-- -->
+
+    data = pp%>%
+      mutate(female=ifelse(SEX==d2,1,0),
+             workstat4=case_when(occupation==1 ~ "Employed",
+                                 occupation==2 ~ "Unemployed",
+                                 occupation==3 ~ "Student",
+                                 occupation==4 ~ "Retired"),
+             workstat3 = case_when(workstat4 == "Employed" | workstat4 == "Unemployed" ~ "Employed_unemployed",
+                                   workstat4 == "Student" ~ "Student",
+                                   workstat4 == "Retired" ~ "Retired"),
+             age_group = case_when(
+               age >= 16 & age < 25 ~ "16-24",
+               age >= 25 & age < 35 ~ "25-34",
+               age >= 35 & age < 45 ~ "35-44",
+               age >= 45 & age < 55 ~ "45-54",
+               age >= 55 & age < 65 ~ "55-64",
+               age >= 65 & age < 75 ~ "65-74",
+               TRUE ~ "75+"))%>%
+      select(id,age_group,female,workstat4,workstat3,imd10)
+    prediction=MonteCarlo_otherSport(m.otherSport$zeroModel,data)
+    table(prediction$zeroPrediction)
+
+    nonzeroPP=prediction%>%filter(!zeroPrediction)
+    nonzeroPP_predict=nonzeroPP%>%mutate(wkhrPrediction=predict.lm(m.otherSport$linear,nonzeroPP))
+    nonzeroPP_predict=nonzeroPP_predict%>%mutate(otherSport_wkhr=pmax(0,wkhrPrediction))
+    pp=pp%>%left_join(nonzeroPP_predict%>%select(id,otherSport_wkhr))
+    pp[is.na(pp)] <- 0
+
+
+    pp=pp%>%mutate(mmetHr_otherSport=otherSport_wkhr*3,
+                   mmetHr_total=mmetHr_cycle+mmetHr_walk+mmetHr_otherSport)
+
+    write_csv(pp,"manchester/physicalActivity/pp_health_2021_withOtherSport.csv")
+
+    summary(pp$mmetHr_total)
+    ggplot(pp)+stat_ecdf(aes(x=mmetHr_total))
+
+    ######################## PRINT COEFs ########################
+    coef(m.otherSport$zeroinfl)
+    coef(m.otherSport$zeroinfl, model = "count")

@@ -35,6 +35,7 @@ Load libaries
 library(dplyr)
 library(vtable)
 library(corrplot)
+library(ggplot2)
 ```
 
 ## Data
@@ -308,7 +309,7 @@ pa_data =pa_data%>%
 pa_data_over0=pa_data[pa_data$mmet_hours_per_week>0,]
 ```
 
-### Models
+### Modelling
 The modelling approach (and earlier data preparation) draws on code from the Manchester physical activity modelling R code file `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi and Marina Berdokhova.
 
 ```{r}
@@ -327,7 +328,7 @@ MonteCarlo_otherSport <- function(model, data,facetVar = NA) {
 }
 ```
 
-#### Predicting mMETS hours/week
+#### Modelling mMETS hours/week
 ```{r}
 #| output: true
 m.otherSport <- list()
@@ -337,7 +338,7 @@ m.otherSport$linear <- lm(mmet_hours_per_week ~ SEX+AGEB+LFSBC+HIGHLVBC+SA1SF2DN
 summary(m.otherSport$linear)
 ```
 
-#### Predicting zero mMETS hours/week
+#### Modelling zero mMETS hours/week
 ```{r}
 #| output: true
 m.otherSport$zeroModel <- glm(mmet_hours_per_week_zero ~ SEX+AGEB+LFSBC+HIGHLVBC+SA1SF2DN,
@@ -347,9 +348,9 @@ m.otherSport$zeroModel <- glm(mmet_hours_per_week_zero ~ SEX+AGEB+LFSBC+HIGHLVBC
 summary(m.otherSport$zeroModel)
 ```
 
-#### Predictions
+#### Modelling outputs
 
-First we save the model
+Save the model outputs for usage later
 ```{r}
 #| output: true
 # Get today's date
@@ -360,17 +361,44 @@ saveRDS(m.otherSport, paste0("model_sport_", today_date, ".rds"))
 ```
 
 ```{r}
-#| output: true
 prediction=MonteCarlo_otherSport(m.otherSport$zeroModel,m.otherSport$zeroModel$data)
 confusion=prediction%>%group_by(mmet_hours_per_week_zero,zeroPrediction)%>%count()
 ```
 
-######################## 2. Apply to SP #######################
+### Predicting mMET hours/week for synthetic population
 
-pp=read_csv("manchester/synPop/sp_2021/pp_health_2021_withIMD.csv")
+To predict mMETs for the synthetic population, we need to understand how the variables are structured and ensure that our model (defined above) has a comparable structure.  We'll load up the data and consider a summary of variables to better understand this.
 
+```{r}
+#| output: true
+pp=readRDS("../../../melbourne/synthetic_population/population_final.rds")
+pp %>% st(out='kable')
+```
+
+Considering the above, I think the following points are worth considering as model refinements:
+
+#### Represent age in years 
+(e.g. using bracket mid-point) as "Age".  This would better model age as a continuous variable, for direct prediction using the synthetic population.  A caveat to that would be consideration of whether age is better modelled as linearly (a more parsimonious approach) or non-linearly (which its current treatment as a factor variable allows for, but complicates things and doesn't directly translate to the synthetic population variable that is continuous age in years).
+
+mMET hours per week by age backet -- there may be some non-linearity (e.g. 18-19 year olds median METS are lower, but perhaps not meaningfully so), but broadly, younger people have higher mMETs:
+```{r}
+#| output: true
+ggplot(pa_data,aes(x=AGEB, y=mmet_hours_per_week)) + geom_boxplot() + coord_flip()
+```
+
+  - on the other hand, there is an `age_cat` variable, however I think the model would have more power if age could be modelled as continuous.  Having said that it will be good to consult with Belen and Qin to get their recommendations and plans for usage.
+- Represent gender using data labels as "Gender".  Currently the sex variable is a factor variable with numbers 1 and 2.  The Gender variable is categorical with string values for "Male" and "Female".  May be best to at least change it to binary indicator 'female' having 0 (male) and 1 (female)
+- Simplify employment as a binary variable "is_employed" with values of 'No' and 'Yes'.  This would be most transparent using value 0 for now and 1 for yes.  But how does one treat a student, are they employed?
+- Simplify education as a three level variable education, having values 'low', 'medium', 'high'.  While it might be that this could be represented as a pseudo continuous variable (0, 1, 2), I think its best to not assume its linear and leave it as a categorical factor variable.
+- There is a variable 'IRSAD' that might be disadvantage but it ranges from -1 to 11, so is not clear what this represents (not simply deciles, and not quintiles)
+- hhSize is present in synthetic population, but it may not be conceptually relevant
+- hhCar is in synethic population, but there is no data to represent this in the NHS data, that I can see.
+
+
+
+```
 data = pp%>%
-  mutate(female=ifelse(gender==2,1,0),
+  mutate(female=ifelse(SEX==d2,1,0),
          workstat4=case_when(occupation==1 ~ "Employed",
                              occupation==2 ~ "Unemployed",
                              occupation==3 ~ "Student",
