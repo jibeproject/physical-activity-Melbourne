@@ -9,7 +9,9 @@ knitr:
     collapse: true
 ---
 
-This Quarto markdown document is intended to contain code to predict physical activity for sport and recreation excluding walking and cycling, given explanatory variables (age, sex, SES, education, has car, etc) that align with the JIBE synthetic population data.  This will be conducted to predict physical activity for residents of Melbourne, Australia, using the Australian Bureau of Statistics Australian National Health Survey data (2017-18).
+This Quarto markdown document is intended to contain code to predict physical activity for sport and recreation excluding walking and cycling, given explanatory variables (age, sex, SES, education, has car, etc) that align with the JIBE synthetic population data. This will be conducted to predict physical activity for residents of Melbourne, Australia, using the Australian Bureau of Statistics Australian National Health Survey data (2017-18).
+
+The analysis draws on Belen Zapata-Diomedi's code for cleaning the NHS dataset (../document.qmd), and Belen Zapata-Diomedi, Qin Zhang and Marina Berdokhova's code for a predictive model of marginal metabolic equivalent hours per week (mMET house/week) for Manchester, UK.
 
 ## Dependencies
 
@@ -17,13 +19,13 @@ Analysis was conducted using R 4.4.1 using a Quarto markdown document (Quarto 1.
 
 The following packages have been installed using renv:
 
-```
-renv::install(c('dplyr','haven','rmarkdown'))
+```         
+renv::install(c('dplyr','corrplot','vtable','rmarkdown'))
 ```
 
 In principle, the R environment for this notebook should be able to be restored by running
 
-```
+```         
 renv::restore()
 ```
 
@@ -31,56 +33,61 @@ Load libaries
 
 ```{r}
 library(dplyr)
+library(vtable)
+library(corrplot)
 ```
 
 ## Data
 
-[National Health Survey](https://www.abs.gov.au/statistics/microdata-tablebuilder/available-microdata-tablebuilder/national-health-survey) (NHS) data for 2017-18 were retrieved from the [Microdata Downloads](https://microdatadownload.abs.gov.au/MicrodataDownload/login.xhtml) section of the Australian Bureau of Statistics website on 3 December 2024.  ABS Microdata were accessed under the [ABS/Universities Australia Agreement (2024)](https://www.abs.gov.au/statistics/microdata-tablebuilder/absuniversities-australia-agreement) by Carl Higgs (RMIT University). The NHS Microdata data descriptions are available for download [here](https://www.abs.gov.au/statistics/microdata-tablebuilder/available-microdata-tablebuilder/national-health-survey#data-item-lists).
+[National Health Survey](https://www.abs.gov.au/statistics/microdata-tablebuilder/available-microdata-tablebuilder/national-health-survey) (NHS) data for 2017-18 were retrieved from the [Microdata Downloads](https://microdatadownload.abs.gov.au/MicrodataDownload/login.xhtml) section of the Australian Bureau of Statistics website on 3 December 2024. ABS Microdata were accessed under the [ABS/Universities Australia Agreement (2024)](https://www.abs.gov.au/statistics/microdata-tablebuilder/absuniversities-australia-agreement) by Carl Higgs (RMIT University). The NHS Microdata data descriptions are available for download [here](https://www.abs.gov.au/statistics/microdata-tablebuilder/available-microdata-tablebuilder/national-health-survey#data-item-lists).
 
-NHS microdata are provided in CSV, SAS, SPSS, or Stata formats.  The CSV data do not have labels, hence the `haven` package could be installed to read the labelled data in .dta (Stata) format.  However, perhaps labels are not required --- for now, CSV will be used to keep things simple.
+NHS microdata are provided in CSV, SAS, SPSS, or Stata formats. The CSV data do not have labels, hence the `haven` package could be installed to read the labelled data in .dta (Stata) format. However, perhaps labels are not required --- for now, CSV will be used to keep things simple.
 
-
-|File (csv, dta, etc) | Description|
-|-----|------------|
-|NHS17HHB|Household level data|
-|NHS17SPB|Person level data|
-|NHS17A3B|Alcohol day level data|
-|NHS17A4B|Alcohol type level data|
-|NHS17CNB|Conditions level data|
-|NHS17MDB|Medications level data|
-|NHS17HLB|Health Literacy level data|
+| File (csv, dta, etc) | Description                |
+|----------------------|----------------------------|
+| NHS17HHB             | Household level data       |
+| NHS17SPB             | Person level data          |
+| NHS17A3B             | Alcohol day level data     |
+| NHS17A4B             | Alcohol type level data    |
+| NHS17CNB             | Conditions level data      |
+| NHS17MDB             | Medications level data     |
+| NHS17HLB             | Health Literacy level data |
 
 : ABS NHS 2017-18 Microdata files
 
-The household data contain geographic attributes and could potentially be used to restrict the sample, e.g. to residents of urban areas within Greater Melbourne.  Sensitivity analysis could be conducted to evaluate the impact of this decision, e.g. relative to all persons and all persons living in Australian urban regions.
+The household data contain geographic attributes and could potentially be used to restrict the sample, e.g. to residents of urban areas within Greater Melbourne. Sensitivity analysis could be conducted to evaluate the impact of this decision, e.g. relative to all persons and all persons living in Australian urban regions.
 
 Household variables of interest include:
 
 | Variable | Description | Comment |
-|----------|-------------|-------------------|
-| ABSHIDB  | Household identifier | Link with persons |
-| GCCSA16  | Greater Capital City Statistical Area (ASGS 2016) | 1 == capital city |
-| SOS16    | Sections of State (ASGS 2016) | 0 == Major urban, 1 == Other urban (filter in c(0,1)) |
-| STATE16  | State or Territory (ASGS 2016) | 2 == Victoria |
-| DWSTQ02  | Dwelling structure | in case of use later |
-| HSTENURE | Tenure type of households | in case of use later  |
-| SA1SF2DN | SEIFA - Index of Relative Socio-economic Disadvantage - 2016 - SA1 - Deciles - National | |
-| GCDISTME | Median commuting distance (kms) |
+|------------------|----------------------|--------------------------------|
+| ABSHIDB | Household identifier | Link with persons |
+| STATE16 | State or Territory (ASGS 2016) | 2 == Victoria |
+| NUMKHHBC | Number
+of children aged 0-17 years  in household | 0, 1, 2, 3==3+ |
+| SA1SF2DN | SEIFA - Index of Relative Socio-economic Disadvantage - 2016 - SA1 - Deciles - National |  |
 
-Note that there are also household geospatial indicators for supermarkets, amenities, fast food an public open space (any, and larger than 1 hecatare) within buffer distances of 400, 1000 and 1500 metres.
-
-Person variables of interest (see data dictionaries for detailed codes) include:
+Person-level variables of interest (see data dictionaries for detailed codes) include:
 
 | Variable | Description | Comment |
-|----------|-------------|-------------------|
-| ABSPID   | Person identifier    | Need to verify that this is unique within households |
-| ABSHIDB  | Household identifier | Link with households |
-| AGE99    | Age of person | |
-| SEX      | Sex of person | 1==Male, 2==Female |
-| HIGHLVL  | Level of highest educational attainment | 0==NA, 1==Postgraduate, ... 13==Never attended school |
-| EMPSTAT  | Labour force full-time/part-time status | 0==NA, 1==Employed full time ... 6 Not in labour force |
-| ... | other variables | more to add |
+|------------------|----------------------|--------------------------------|
+| ABSPID | Person identifier | Need to verify that this is unique within households |
+| ABSHIDB | Household identifier | Link with households |
+| AGEB | Age of person | 1== 0-4 years  … 19 == 85 years+ |
+| SEX | Sex of person | 1==Male, 2==Female |
+| LFSBC | Labour force status | 0==NA, 1==Employed, 2==Unemployed, 3==Not in the labour force |
+| HYSCHCBC | Highest year of school completed | 0==NA, 1==Postgraduate, ... 13==Never attended school |
+| HIGHLVLBC | Level of highest educational attainment | 0==NA, 1==Postgraduate, ... 13==Never attended school |
+| EMPSTAT | Labour force full-time/part-time status | 0==NA, 1==Employed full time ... 6 Not in labour force |
+|Walk for recreation (mins)| EXFSRMIN | Total minutes walked for fitness, recreation or sport in last week (for at least 10 minutes) |
+|Walk for transport (mins) | EXTRAMIN | Total minutes spent walking for transport in last week (for at least 10 minutes) |
+|Moderate exercise (mins) | EXLWMMIN | Total minutes undertaken moderate exercise last week (for example, a light jog, strenght and toning exercises, lifting small boxes and sweeping)|
+|Vigorous exercise (mins)| EXLWVMIN | Total minutes undertaken vigorous exercise last week (for example, playing basketball, running, lifting heavy boxes, and strength and toning exercises)|
 
+## Methods
+
+### Read and join the data
+Adults aged 18 years and over from the persons dataset are left joined to the household data, with only the relevant variables retained.  The core exposure variables are renamed to enhance readability of the subsequent code.  
 
 ```{r}
 data_dir <- '/Users/E33390/Library/CloudStorage/OneDrive-RMITUniversity/projects/abs/microdata/NHS2017-18_CSV/NHS2017-18_CSV/'
@@ -90,6 +97,7 @@ data <- list(
 )
 ```
 
+
 ```{r}
 #| output: true
 
@@ -98,20 +106,11 @@ nhs <- left_join(
                 select(
                     c( 
                         "ABSHIDB",
-                        # "GCCSA16", 
-                        # "SOS16",
                         "STATE16", 
-                        "DWLSTRBC",
-                        "TENUREC",
-                        "SA1SF2DN", 
-                        # "GCDISTME"
+                        "NUMKHHBC",
+                        "SA1SF2DN"
                     )
-                )
-                %>%  filter(
-                    STATE16==2
-                #     GCCSA16==1 &
-                #     SOS16 %in% c(0,1)
-                ), # for Victoria GCCSA (i.e. Melbourne) urban regions 
+                ),
             data$persons %>% 
                 select(
                     c(
@@ -119,31 +118,294 @@ nhs <- left_join(
                         "ABSHIDB",
                         "AGEB",
                         "SEX",
+                        "LFSBC",
+                        "HYSCHCBC",
                         "HIGHLVBC",
-                        "EMPTYPE",
-                        "EXLWNO",
-                        "EXLWKTNO",
-                        "EXLWTIME",
-                        "EXTRAMIN"
+                        "EXFSRMIN",
+                        "EXTRAMIN",
+                        "EXLWMMIN",
+                        "EXLWVMIN"
                     )
-                ) %>%
+                ) %>% rename(
+                    walk_recreation_min=EXFSRMIN,
+                    walk_transport_min=EXTRAMIN,
+                    mod_excercise_min=EXLWMMIN,
+                    vig_excercise_min=EXLWVMIN
+                )%>% 
                 filter(
-                    EXLWNO != 997 & 
-                    EXLWNO != 998 & 
-                    EXLWKTNO != 997 & 
-                    EXLWKTNO != 998 & 
-                    EXLWTIME < 1440 &
-                    EXTRAMIN < 1440 
+                    AGEB > 4
                 ), 
         by = "ABSHIDB"
         ) 
-nhs['_exercise_times_excl_walking'] <- nhs$EXLWNO - nhs$EXLWKTNO
-nhs['_exercise_mins_excl_walking'] <- nhs$EXLWTIME - nhs$EXTRAMIN
-nhs %>% summary()
+nhs %>% st(out='kable')
 ```
 
-So, geographic variables are not available in the downloadable microdata; perhaps accessible only in DataLab (requires extra approval for usage).  Likewise the discrete age variable (AGE99), instead the equivalent is 'AGEB', presumably 5-year age bands (ranges from 1 to 19, so multiplied by 5 is 0-5 to 90-95+, perhaps although ideally a data dictionary could be located to confirm).  Highest level of educational attainment and employment type variables also differ and will need to be understood.  But really, should arrange access to DataLab.
+### Data preparation
 
-The maximum values for time spent doing exercise (3420 and 2400 minutes) are not realistic (57 and 40 hours); these should be excluded.  This could be achieved by taking less than 24*60 = 1440 minutes.  A day of exercise is still unrealistic, but a limit must be drawn somewhere. (an empiric estimate of 99th percentile could be another approach)
+Missing data or NA values (e.g 99997 and 99998) are replaced as missing, while maximum values of walking time variables are truncated at 840 minutes to constrain influence of extreme outliers.  
 
-Also --- should really do the above working off Belen's existing codebook that has cleaning code already specified and contains the full logic looking at moderate vs vigorous pa
+SA1 Index of Relative Socio-economic Disadvantage (IRSD; `SA1SF2DN`) is rescaled to use quintiles rather than deciles, for consistency with the synthetic population, with '1' being most deprived and '5' being least deprived.
+
+Age is treated as a factor variable.  Note that while most age brackets are 5 years, the age bracket of 18-19 is an exception.
+
+For now, I have retained labour force status for comparability with Manchester analysis that considered employment, as well as two potential variables for considering education: one considers highest school level to year 12, the other has more levels also including postgraduate and technical/further education certificates.  Perhaps a simplified combination of those two variables may be most parsimonious, and something that can be considered together later.
+
+Marginal metabolic equivalent house per week (mMET hours/week; `mmet`) are calculated as the sum of hours spent walking for recreation, walking for transport, doing moderate exercise and doing vigorous exercise, with each respectively multiplied by the metabolic equivalent of these tasks (METs).
+
+```{r}
+#| output: true
+MMET_MOD <- 3.5 # As in meta analysis GArcia et al. 
+MMET_VIG <- 7 # As in meta analysis GArcia et al. 
+MMET_CYCLING <- 5.8 # From ithimr (check)
+MMET_WALKING <- 2.5 # From ithimr (check)
+
+pa_data <- nhs  %>%
+    mutate_all(~ ifelse( . %in% c(99997, 99998), NA, .)) %>%
+    mutate(
+        walk_recreation_min = case_when(
+                walk_recreation_min > 840 ~ 840, 
+                TRUE ~  walk_recreation_min # handles unexpected values using default
+            ),
+        walk_transport_min = case_when(
+                walk_transport_min > 840 ~ 840, 
+                TRUE ~ walk_transport_min
+            ),
+        mod_excercise_min = case_when(
+                mod_excercise_min > 840 ~ 840, 
+                TRUE ~ mod_excercise_min
+            ),
+        vig_excercise_min = case_when(
+                vig_excercise_min > 840 ~ 840, 
+                TRUE ~ vig_excercise_min
+            )
+    ) %>%
+    mutate (
+        AGEB = factor(
+            AGEB, 
+            levels = 5:19, 
+            labels = c("18-19","20-24", "25-29", "30-34", "35-39", 
+                        "40-44", "45-49", "50-54", "55-59", 
+                        "60-64", "65-69", "70-74", "75-79", 
+                        "80-84", "≥85"),
+            ordered = TRUE
+        )
+    ) %>%
+    mutate(
+        SA1SF2DN = case_when(
+            SA1SF2DN %in% c(1, 2) ~ 1,
+            SA1SF2DN %in% c(3, 4) ~ 2,
+            SA1SF2DN %in% c(5, 6) ~ 3,
+            SA1SF2DN %in% c(7, 8) ~ 4,
+            SA1SF2DN %in% c(9, 10) ~ 5
+        )
+    ) %>% 
+    mutate(
+        SA1SF2DN = factor(
+            SA1SF2DN, 
+            levels = 1:5, 
+            labels = c("1 (most deprived)", "2", "3", "4", "5 (least deprived)"),
+            ordered = TRUE)
+    ) %>%
+    mutate(
+        SEX = factor(
+            SEX, 
+            levels = 1:2, 
+            labels = c("Male", "Female"),
+            ordered = TRUE)
+    ) %>%
+    mutate(
+        LFSBC = factor(
+            LFSBC,
+            levels = c(0, 1, 2, 3),
+            labels = c(
+                "Not applicable",
+                "Employed",
+                "Unemployed",
+                "Not in the labour force"
+                )
+            )
+    ) %>%
+    mutate(
+        HYSCHCBC = factor(
+            HYSCHCBC,
+            levels = c(0, 1, 2, 3, 4, 5, 9),
+            labels = c(
+                    "Not applicable",
+                    "Year 12 or equivalent",
+                    "Year 11 or equivalent",
+                    "Year 10 or equivalent",
+                    "Year 9 or equivalent",
+                    "Year 8 or below including never attended School",
+                    "Not asked"
+                )
+            )
+    ) %>%
+    mutate(
+        HIGHLVBC = factor(
+            HIGHLVBC,
+            levels = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+            labels = c(
+                    "Not applicable",
+                    "Postgraduate Degree, Graduate Diploma/Graduate Certificate",
+                    "Bachelor Degree",
+                    "Advanced Diploma/Diploma",
+                    "Certificates III/IV",
+                    "Year 12",
+                    "Year 11",
+                    "Year 10",
+                    "Certificates I/II",
+                    "Year 9 and below",
+                    "Certificate not further defined",
+                    "Level not determined",
+                    "Never attended school and no non-school qualification"
+                )
+        )
+    ) %>%
+    mutate(
+        mmet_hours_per_week=walk_recreation_min/60* MMET_WALKING +
+             walk_transport_min/60 * MMET_WALKING + 
+             mod_excercise_min/60 * MMET_MOD + 
+             vig_excercise_min/60 * MMET_VIG
+    )  %>%
+    mutate(
+        mmet_hours_per_week_zero = ifelse(mmet_hours_per_week == 0, 1, 0))
+
+pa_data %>% st(out='kable')
+```
+
+### Exploratory data analysis
+#### Correlations
+For now I have included both education variables in the below exploratory data analysis, although most likely a derived combined variable for education will be used, pending discussion with the team.  The State variable is also included to get a sense of how variables differ across Australian states; Victorian-specific results could be expected to be mostly drawn from Melbourne, and this could be explored in a sensitivity analysis.
+
+Many of our variables are factor variables for which direct numeric correlations could be misleading (i.e. they aren't necessarily ordinal or linear, e.g. labour force status, or 'NA' values in educational attainment).
+```{r}
+#| output: true
+cor=as.data.frame(lapply(pa_data[, c("SA1SF2DN", "AGEB", "SEX", "LFSBC", "HYSCHCBC", "HIGHLVBC", "mmet_hours_per_week")], as.numeric))
+cor=na.omit(cor)
+correlation_matrix <- cor(cor) %>% as.data.frame()
+# corrplot(correlation_matrix %>% as.double(), method = "number",order = "FPC",type="lower") 
+correlation_matrix[order(correlation_matrix$mmet_hours_per_week),] %>% round(2)
+```
+
+Labour force status and age are both more tightly correlated with completion of high school (HYSCHCBC) than the variable that also considers postgraduate and certificate training (HIGHLVBC); for now will use the latter, to reduce risk of multicollinearity.
+
+Persons are theoretically clustered within households.  If there is more than one person within each household, as this data structure implies, this clustering should be accounted for in the model.  The following checks the maximum number of persons within households, and confirms that only one person is associated with each household and so clustering within households will not be required in the model.
+
+```{r}
+#| output: true
+pa_data %>%
+  group_by(ABSHIDB) %>%
+  summarise(num_persons = n()) %>%
+  summarise(max_persons = max(num_persons))
+```
+
+Set up data for modelling
+```{r}
+pa_data =pa_data%>%
+  select(ABSPID,SEX,AGEB,LFSBC,HIGHLVBC,SA1SF2DN,mmet_hours_per_week, mmet_hours_per_week_zero)%>%
+  na.omit()
+
+pa_data_over0=pa_data[pa_data$mmet_hours_per_week>0,]
+```
+
+### Models
+The modelling approach (and earlier data preparation) draws on code from the Manchester physical activity modelling R code file `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi and Marina Berdokhova.
+
+```{r}
+MonteCarlo_otherSport <- function(model, data,facetVar = NA) {
+  sport.var <- as.character(model$formula[2])
+  
+  probability.matrix <- as.vector(predict(model,data,type = "response"))
+  MC.prediction <- rep(NA,nrow(data))
+  for(n in c(1:nrow(data))) {
+    MC.prediction[n] <- runif(1)<=probability.matrix[n]
+  }
+  
+  data=data%>%mutate(zeroPrediction=MC.prediction)
+  
+  return(data)
+}
+```
+
+#### Predicting mMETS hours/week
+```{r}
+#| output: true
+m.otherSport <- list()
+
+m.otherSport$linear <- lm(mmet_hours_per_week ~ SEX+AGEB+LFSBC+HIGHLVBC+SA1SF2DN,
+                          data = pa_data_over0)
+summary(m.otherSport$linear)
+```
+
+#### Predicting zero mMETS hours/week
+```{r}
+#| output: true
+m.otherSport$zeroModel <- glm(mmet_hours_per_week_zero ~ SEX+AGEB+LFSBC+HIGHLVBC+SA1SF2DN,
+                              family = "binomial",data = pa_data)
+
+
+summary(m.otherSport$zeroModel)
+```
+
+#### Predictions
+
+First we save the model
+```{r}
+#| output: true
+# Get today's date
+today_date <- format(Sys.Date(), "%d%m%Y")
+
+# Save the RDS file with today's date in the filename
+saveRDS(m.otherSport, paste0("model_sport_", today_date, ".rds"))
+```
+
+```{r}
+#| output: true
+prediction=MonteCarlo_otherSport(m.otherSport$zeroModel,m.otherSport$zeroModel$data)
+confusion=prediction%>%group_by(mmet_hours_per_week_zero,zeroPrediction)%>%count()
+```
+
+######################## 2. Apply to SP #######################
+
+pp=read_csv("manchester/synPop/sp_2021/pp_health_2021_withIMD.csv")
+
+data = pp%>%
+  mutate(female=ifelse(gender==2,1,0),
+         workstat4=case_when(occupation==1 ~ "Employed",
+                             occupation==2 ~ "Unemployed",
+                             occupation==3 ~ "Student",
+                             occupation==4 ~ "Retired"),
+         workstat3 = case_when(workstat4 == "Employed" | workstat4 == "Unemployed" ~ "Employed_unemployed",
+                               workstat4 == "Student" ~ "Student",
+                               workstat4 == "Retired" ~ "Retired"),
+         age_group = case_when(
+           age >= 16 & age < 25 ~ "16-24",
+           age >= 25 & age < 35 ~ "25-34",
+           age >= 35 & age < 45 ~ "35-44",
+           age >= 45 & age < 55 ~ "45-54",
+           age >= 55 & age < 65 ~ "55-64",
+           age >= 65 & age < 75 ~ "65-74",
+           TRUE ~ "75+"))%>%
+  select(id,age_group,female,workstat4,workstat3,imd10)
+prediction=MonteCarlo_otherSport(m.otherSport$zeroModel,data)
+table(prediction$zeroPrediction)
+
+nonzeroPP=prediction%>%filter(!zeroPrediction)
+nonzeroPP_predict=nonzeroPP%>%mutate(wkhrPrediction=predict.lm(m.otherSport$linear,nonzeroPP))
+nonzeroPP_predict=nonzeroPP_predict%>%mutate(otherSport_wkhr=pmax(0,wkhrPrediction))
+pp=pp%>%left_join(nonzeroPP_predict%>%select(id,otherSport_wkhr))
+pp[is.na(pp)] <- 0
+
+
+pp=pp%>%mutate(mmetHr_otherSport=otherSport_wkhr*3,
+               mmetHr_total=mmetHr_cycle+mmetHr_walk+mmetHr_otherSport)
+
+write_csv(pp,"manchester/physicalActivity/pp_health_2021_withOtherSport.csv")
+
+summary(pp$mmetHr_total)
+ggplot(pp)+stat_ecdf(aes(x=mmetHr_total))
+
+######################## PRINT COEFs ########################
+coef(m.otherSport$zeroinfl)
+coef(m.otherSport$zeroinfl, model = "count")
+```
