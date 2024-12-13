@@ -13,6 +13,14 @@ This Quarto markdown document is intended to contain code to predict physical ac
 
 The analysis draws on Belen Zapata-Diomedi's code for cleaning the NHS dataset (../document.qmd), and Belen Zapata-Diomedi, Qin Zhang and Marina Berdokhova's code for a predictive model of marginal metabolic equivalent hours per week (mMET house/week) for Manchester, UK.
 
+To allow this code to be run on different computers and operating systems easily, rather than hardcode data paths for inputs there is a file chooser for the three key inputs used:
+
+1. ABS NHS households (NHS17HHB.csv)
+2. ABS NHS persons (NHS17PSB.csv)
+3. Melbourne synthetic population (population_final.rds)
+
+The user will be asked to provide paths for these files in this order.  If using RStudio or Visual Studio code, there should be a graphical file picker.  If using Posit or commandline on linux, you may have to enter the file path string.
+
 ## Dependencies
 
 Analysis was conducted using R 4.4.1 using a Quarto markdown document (Quarto 1.5.55) in Positron IDE (2024.10.0), with renv 1.0.11 for package management.
@@ -20,7 +28,7 @@ Analysis was conducted using R 4.4.1 using a Quarto markdown document (Quarto 1.
 The following packages have been installed using renv:
 
 ```         
-renv::install(c('dplyr','corrplot','vtable','rmarkdown'))
+renv::install(c('dplyr','data.table','ggplot2','vtable','rmarkdown'))
 ```
 
 In principle, the R environment for this notebook should be able to be restored by running
@@ -32,10 +40,11 @@ renv::restore()
 Load libaries
 
 ```{r}
+#| label: load-libraries
 library(dplyr)
 library(vtable)
-library(corrplot)
 library(ggplot2)
+library(data.table)
 ```
 
 ## Data
@@ -91,15 +100,20 @@ Person-level variables of interest (see data dictionaries for detailed codes) in
 Adults aged 18 years and over from the persons dataset are left joined to the household data, with only the relevant variables retained.  The core exposure variables are renamed to enhance readability of the subsequent code.  
 
 ```{r}
-data_dir <- '/Users/E33390/Library/CloudStorage/OneDrive-RMITUniversity/projects/abs/microdata/NHS2017-18_CSV/NHS2017-18_CSV/'
+#| label: load-NHS17HHB.csv-NHS17SPB.csv
+# choose household file (may require GUI IDE like RStudio/PositStudio/VSCode)
+NHS17HHB.csv <- file.choose()
+# choose person file (may require GUI IDE like RStudio/PositStudio/VSCode)
+NHS17SPB.csv <- file.choose()
 data <- list(
-    households = read.csv(paste0(data_dir,'NHS17HHB.csv')),
-    persons = read.csv(paste0(data_dir,'NHS17SPB.csv'))
+    households = read.csv(NHS17HHB.csv),
+    persons = read.csv(NHS17SPB.csv)
 )
 ```
 
 
 ```{r}
+#| label: merge-nhs-data
 #| output: true
 
 nhs <- dplyr::left_join(
@@ -146,9 +160,13 @@ nhs %>% st(out='kable')
 
 To predict mMETs for the synthetic population, we need to understand how the variables are structured and ensure that our NHS derived data that we will use in modelling has a comparable structure.  We'll load up the data and consider a summary of variables to better understand this.
 
+I am using [data.table](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html) as it is meant to be optimised for handling large datasets, like this synthetic population.  This performs subsequent operations deriving new variables much faster.
+
 ```{r}
+#| label: load-synthetic-population-population_final.rds
 #| output: true
-pp=readRDS("../../../melbourne/synthetic_population/population_final.rds")
+population_final.rds <- file.choose()
+pp <- readRDS(population_final.rds) %>% as.data.table()
 pp %>% st(out='kable')
 ```
 
@@ -185,6 +203,7 @@ When deriving factor variables I have set ordered to False, as the alternative s
 Remember that SA1 IRSD ranges from 1 (most deprived) to 5 (least deprived).
 
 ```{r}
+#| label: setup-pa-data
 #| output: true
 MMET_MOD <- 3.5 # As in meta analysis GArcia et al. 
 MMET_VIG <- 7 # As in meta analysis GArcia et al. 
@@ -287,6 +306,7 @@ pa_data %>% st(out='kable')
 
 mMET hours per week by age backet -- there may be some non-linearity (e.g. 18-19 year olds median METS are lower, but perhaps not meaningfully so), but broadly, younger people have higher mMETs:
 ```{r}
+#| label: visualise-age-distribution
 #| output: true
 ggplot(pa_data,aes(x=AGEB, y=mmet_hours_per_week)) + geom_boxplot() + coord_flip()
 qplot(x=pa_data$age_years,y=pa_data$mmet_hours_per_week, geom='smooth', span =0.5)
@@ -299,6 +319,7 @@ For now I have included both education variables in the below exploratory data a
 
 Many of our variables are factor variables for which direct numeric correlations could be misleading (i.e. they aren't necessarily ordinal or linear, e.g. labour force status, or 'NA' values in educational attainment).
 ```{r}
+#| label: explore-correlations
 #| output: true
 cor=as.data.frame(lapply(pa_data[, c("irsd_sa1", "age_years", "female", "is_employed", "is_student", "education", "NUMPERBC", "mmet_hours_per_week")], as.numeric))
 cor=na.omit(cor)
@@ -313,6 +334,7 @@ None of the variables in themselves are strongly associated with mMET hours/week
 Persons are theoretically clustered within households.  If there is more than one person within each household, as this data structure implies, this clustering should be accounted for in the model.  The following checks the maximum number of persons within households, and confirms that only one person is associated with each household and so clustering within households will not be required in the model.
 
 ```{r}
+#| label: explore-clustering
 #| output: true
 pa_data %>%
   group_by(ABSHIDB) %>%
@@ -323,6 +345,7 @@ pa_data %>%
 #### Set up data for modelling
 Select relevant variables and only retain records with full data.
 ```{r}
+#| label: collate-modelling-data
 #| output: true
 pa_data =pa_data%>%
   select(ABSPID, age_years, female, is_employed, education, irsd_sa1, mmet_hours_per_week, mmet_hours_per_week_zero)%>%
@@ -333,6 +356,7 @@ pa_data %>% st(out='kable')
 
 Copy a subset of data for persons who record at least some mMET hours/week
 ```{r}
+#| label: collate-modelling-positive-mMETS-data
 #| output: true
 pa_data_over0=pa_data[pa_data$mmet_hours_per_week>0,]
 pa_data_over0 %>% st(out='kable')
@@ -341,128 +365,145 @@ pa_data_over0 %>% st(out='kable')
 ### Modelling
 The modelling approach (and earlier data preparation) draws on code from the Manchester physical activity modelling R code file `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi and Marina Berdokhova.
 
-```{r}
-MonteCarlo_otherSport <- function(model, data,facetVar = NA) {
-  sport.var <- as.character(model$formula[2])
-  
-  probability.matrix <- as.vector(predict(model,data,type = "response"))
-  MC.prediction <- rep(NA,nrow(data))
-  for(n in c(1:nrow(data))) {
-    MC.prediction[n] <- runif(1)<=probability.matrix[n]
-  }
-  
-  data=data%>%mutate(zeroPrediction=MC.prediction)
-  
-  return(data)
-}
-```
-
 #### Modelling mMETS hours/week
 ```{r}
+#| label: model-total-mMETs
 #| output: true
-m.otherSport <- list()
+m.total_mMETs <- list()
 
-m.otherSport$linear <- lm(
+m.total_mMETs$linear <- lm(
     mmet_hours_per_week ~ female+age_years+is_employed+education+irsd_sa1,
     data = pa_data_over0)
-summary(m.otherSport$linear)
+summary(m.total_mMETs$linear)
 ```
 
 #### Modelling zero mMETS hours/week
 ```{r}
+#| label: model-total-mMETS-zero
 #| output: true
-m.otherSport$zeroModel <- glm(
+m.total_mMETs$zeroModel <- glm(
     mmet_hours_per_week_zero ~ female+age_years+is_employed+education+irsd_sa1,
     family = "binomial",
     data = pa_data
 )
 
-summary(m.otherSport$zeroModel)
+summary(m.total_mMETs$zeroModel)
 ```
-
-#### Modelling outputs
 
 Save the model outputs for usage later
 ```{r}
+#| label: save-model-outputs
 #| output: true
 # Get today's date
 today_date <- format(Sys.Date(), "%d%m%Y")
 
 # Save the RDS file with today's date in the filename
-saveRDS(m.otherSport, paste0("model_sport_", today_date, ".rds"))
+saveRDS(m.total_mMETs, paste0("model_total_mMETs_", today_date, ".rds"))
+```
+
+### Predictions
+
+```{r}
+#| label: montecarlo-prediction-function
+MonteCarlo <- function(model, data,facetVar = NA) {
+  probability.matrix <- as.vector(predict(model,data,type = "response"))
+  MC.prediction <- rep(NA,nrow(data))
+  for(n in c(1:nrow(data))) {
+    MC.prediction[n] <- runif(1)<=probability.matrix[n]
+  }
+  data=data%>%mutate(zeroPrediction=MC.prediction)
+  return(data)
+}
 ```
 
 ```{r}
-prediction=MonteCarlo_otherSport(m.otherSport$zeroModel,m.otherSport$zeroModel$data)
-confusion=prediction%>%group_by(mmet_hours_per_week_zero,zeroPrediction)%>%count()
+#| label: predict-total-mMETs-nhs
+#| output: true
+prediction=MonteCarlo(m.total_mMETs$zeroModel,m.total_mMETs$zeroModel$data)
+confusion=prediction %>% 
+    group_by(mmet_hours_per_week_zero,zeroPrediction) %>% 
+    count()  %>%
+    group_by(mmet_hours_per_week_zero) %>%
+    mutate(percentage = n / sum(n) * 100)
+confusion
 ```
+I've adapted this code, but not entirely sure what we are attempting to achieve here; maybe we need to discuss this!
 
-### Predicting mMET hours/week for synthetic population
+#### Predicting mMET hours/week for synthetic population
 
 Now we need to get our synthetic population data into the equivalent format to our model, e.g. by converting string categorical variables to binary indicators and adapting the SEIFA IRSD to quintiles.  Then we can use our predictions and apply them to the synthetic population.
 
-#### Synthetic population data preparation
-```
+```{r}
+#| label: prepare-synthetic-population-prediction
 #| output: true
-data <- pp %>%
-    mutate(
-        irsd_sa1 = case_when(
-            IRSAD %in% c(1, 2) ~ 1,
-            IRSAD %in% c(3, 4) ~ 2,
-            IRSAD %in% c(5, 6) ~ 3,
-            IRSAD %in% c(7, 8) ~ 4,
-            IRSAD %in% c(9, 10) ~ 5,
-            TRUE ~ NA_real_  # Handle unexpected values
-        ),
-        age_years = Age,
-        female=ifelse(Gender=="Female",1,0),
-        is_employed=ifelse(is_employed=="Yes",1,0),
-        education = case_when(
-            education == 'high' ~ 2,
-            education == 'medium' ~ 1,
-            education == 'low' ~ 0,
-            TRUE ~ NA_real_  # Handle unexpected values
-            )
-    ) %>%
-    mutate(
-        education = factor(
-            education,
-            levels=0:2,
-            labels=c('low','medium','high'),
-            ordered=FALSE
-        )
-    ) %>% 
-  select(AgentId, age_years, female, is_employed, education, irsd_sa1)
+# Perform the transformations
+pp[, `:=`(
+    irsd_sa1 = fifelse(IRSAD %in% c(1, 2), 1,
+                fifelse(IRSAD %in% c(3, 4), 2,
+                fifelse(IRSAD %in% c(5, 6), 3,
+                fifelse(IRSAD %in% c(7, 8), 4,
+                fifelse(IRSAD %in% c(9, 10), 5, NA_real_))))),
+    age_years = Age,
+    female = fifelse(Gender == "Female", 1, 0),
+    is_employed = fifelse(is_employed == "Yes", 1, 0),
+    education = fifelse(education == 'high', 2,
+                fifelse(education == 'medium', 1,
+                fifelse(education == 'low', 0, NA_real_)))
+)]
+
+# Convert education to a factor
+pp[, education := factor(education, levels = 0:2, labels = c('low', 'medium', 'high'), ordered = FALSE)]
+
+# Select the relevant columns
+data <- pp[, .(AgentId, age_years, female, is_employed, education, irsd_sa1)]
   
 
 data %>% st(out='kable')
 ```
 
 #### Prediction of mMET hours/week for synethic population
-```
-prediction=MonteCarlo_otherSport(m.otherSport$zeroModel,data)
+```{r}
+#| label: predict-synpop-mMETs
+#| output: true
+prediction=MonteCarlo(m.total_mMETs$zeroModel,data)
 table(prediction$zeroPrediction)
 ```
 
 #### Join estimates back onto synthetic population
-```
+```{r}
+#| label: synpop-prediction-outputs
+#| output: true
 nonzeroPP = prediction %>% filter(!zeroPrediction)
 
 nonzeroPP_predict = nonzeroPP %>% mutate(
-    wkhrPrediction=predict.lm(m.otherSport$linear,nonzeroPP)
+    wkhrPrediction=predict.lm(m.total_mMETs$linear,nonzeroPP)
     )
-nonzeroPP_predict = nonzeroPP_predict%>%mutate(mmetHr_total=pmax(0,wkhrPrediction))
-pp=pp%>%left_join(nonzeroPP_predict%>%select(AgentId,otherSport_wkhr))
+nonzeroPP_predict = nonzeroPP_predict %>% mutate(
+    mmetHr_total=pmax(0,wkhrPrediction)
+)
+pp=pp%>%left_join(nonzeroPP_predict%>%select(AgentId,mmetHr_total))
 pp[is.na(pp)] <- 0
 summary(pp$mmetHr_total)
 ggplot(pp)+stat_ecdf(aes(x=mmetHr_total))
-coef(m.otherSport$zeroinfl)
-coef(m.otherSport$zeroinfl, model = "count")
+coef(m.total_mMETs$zeroinfl)
+coef(m.total_mMETs$zeroinfl, model = "count")
 ```
 
+```{r}
+#| label: save-predicted-mMETS-synpop
+#| output: true
+fwrite(pp,"pp_health_2021_withTotalMMets.csv")
 ```
 
-write_csv(pp,"manchester/physicalActivity/pp_health_2021_withOtherSport.csv")
-
-
+```{r}
+#| label: boxplot-mmetHr_total
+#| output: true
+# Layout to split the screen
+layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(1,8))
+ 
+# Draw the boxplot and the histogram 
+par(mar=c(0, 3.1, 1.1, 2.1))
+boxplot(pp$mmetHr_total, horizontal=TRUE , ylim=c(0,30), xaxt="n" , col=rgb(0.8,0.8,0,0.5) , frame=F)
+par(mar=c(4, 3.1, 1.1, 2.1))
+hist(pp$mmetHr_total, breaks=40 , col=rgb(0.2,0.8,0.5,0.5) , border=F , main="" , xlab="Predicted mMET hours/week", xlim=c(0,30))
 ```
