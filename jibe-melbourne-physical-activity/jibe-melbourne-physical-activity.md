@@ -35,7 +35,7 @@ package management.
 
 The following packages have been installed using renv:
 
-    renv::install(c('dplyr','data.table','ggplot2','vtable','rmarkdown'))
+    renv::install(c('dplyr','data.table','ggplot2','vtable','rmarkdown','pscl'))
 
 In principle, the R environment for this notebook should be able to be
 restored by running
@@ -660,6 +660,10 @@ summary(m.total_mMETs$linear)
 ## F-statistic: 40.47 on 6 and 6831 DF,  p-value: < 2.2e-16
 ```
 
+In this model, most predicted results were slightly under-estimated
+compared with the observed values (median -5.6 mMET hours/week; IQR
+-11.7 to 6.3).
+
 #### Modelling zero mMETS hours/week
 
 ``` r
@@ -697,15 +701,159 @@ summary(m.total_mMETs$zeroModel)
 ## Number of Fisher Scoring iterations: 5
 ```
 
-Save the model outputs for usage later
+Considering the non-normal nature of mMET hours/week, which is a
+positively skewed rate variable (a non-negative count of hours per
+week), it is worth considering whether a Poisson model might be more
+appropriate and provide a better fit.
 
 ``` r
-# Get today's date
-today_date <- format(Sys.Date(), "%d%m%Y")
-
-# Save the RDS file with today's date in the filename
-saveRDS(m.total_mMETs, paste0("model_total_mMETs_", today_date, ".rds"))
+hist(pa_data$mmet_hours_per_week) 
 ```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/consider_model_for_rate_data-1.png)
+
+``` r
+hist(log(pa_data$mmet_hours_per_week))
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/consider_model_for_rate_data-2.png)
+
+``` r
+summary(pa_data$mmet_hours_per_week)
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##   0.000   2.500   8.167  14.517  20.500 168.000
+mean_mmet <- mean(pa_data$mmet_hours_per_week)
+var_mmet <- var(pa_data$mmet_hours_per_week)
+
+print(paste("Mean:", mean_mmet))
+## [1] "Mean: 14.5173096613016"
+print(paste("Variance:", var_mmet))
+## [1] "Variance: 317.808067651961"
+if (var_mmet > 2 * mean_mmet) {
+    print("var_mmet > 2 * mean_mmet (Consider using a Negative Binomial or Zero-Inflated Negative Binomial model due to overdispersion)")
+}
+## [1] "var_mmet > 2 * mean_mmet (Consider using a Negative Binomial or Zero-Inflated Negative Binomial model due to overdispersion)"
+```
+
+The model may appear appoximately normally distributed on a log scale,
+it also has considerably over-dispersion so a negative binomial model
+may be appropriate, potentially accounting for the large number of
+zeros.
+
+``` r
+library(MASS)
+library(pscl)
+
+m.total_mMETs$neg_binom <- glm.nb(
+    mmet_hours_per_week ~ female + age_years + is_employed + education + irsd_sa1,
+    data = pa_data
+)
+
+summary(m.total_mMETs$neg_binom)
+## 
+## Call:
+## glm.nb(formula = mmet_hours_per_week ~ female + age_years + is_employed + 
+##     education + irsd_sa1, data = pa_data, init.theta = 0.6573741891, 
+##     link = log)
+## 
+## Coefficients:
+##                  Estimate Std. Error z value Pr(>|z|)    
+## (Intercept)      2.391444   0.135944  17.591  < 2e-16 ***
+## female          -0.240994   0.028600  -8.426  < 2e-16 ***
+## age_years       -0.006630   0.001002  -6.615 3.71e-11 ***
+## is_employed      0.100407   0.035505   2.828  0.00468 ** 
+## educationmedium  0.184990   0.117561   1.574  0.11559    
+## educationhigh    0.466551   0.118683   3.931 8.46e-05 ***
+## irsd_sa1         0.092533   0.010592   8.736  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for Negative Binomial(0.6574) family taken to be 1)
+## 
+##     Null deviance: 10129.2  on 8138  degrees of freedom
+## Residual deviance:  9668.8  on 8132  degrees of freedom
+## AIC: 59030
+## 
+## Number of Fisher Scoring iterations: 1
+## 
+## 
+##               Theta:  0.6574 
+##           Std. Err.:  0.0109 
+## 
+##  2 x log-likelihood:  -59013.8600
+
+# Zero-Inflated Negative Binomial model
+pa_data$mmet_hours_per_week_round <- round(pa_data$mmet_hours_per_week)
+
+m.total_mMETs$zinb <- zeroinfl(
+    mmet_hours_per_week_round ~ female + age_years + is_employed + education + irsd_sa1 | female + age_years + is_employed + education + irsd_sa1,
+    data = pa_data,
+    dist = "negbin"
+)
+
+# Summary of the Zero-Inflated Negative Binomial model
+summary(m.total_mMETs$zinb)
+## 
+## Call:
+## zeroinfl(formula = mmet_hours_per_week_round ~ female + age_years + is_employed + 
+##     education + irsd_sa1 | female + age_years + is_employed + education + 
+##     irsd_sa1, data = pa_data, dist = "negbin")
+## 
+## Pearson residuals:
+##     Min      1Q  Median      3Q     Max 
+## -0.9235 -0.6954 -0.3613  0.3358  9.0739 
+## 
+## Count model coefficients (negbin with log link):
+##                   Estimate Std. Error z value Pr(>|z|)    
+## (Intercept)      2.6466925  0.1389950  19.042  < 2e-16 ***
+## female          -0.2562271  0.0263709  -9.716  < 2e-16 ***
+## age_years       -0.0034920  0.0009545  -3.659 0.000254 ***
+## is_employed      0.0954131  0.0326992   2.918 0.003524 ** 
+## educationmedium  0.0611648  0.1254226   0.488 0.625784    
+## educationhigh    0.2282646  0.1260724   1.811 0.070205 .  
+## irsd_sa1         0.0630390  0.0098692   6.387 1.69e-10 ***
+## Log(theta)      -0.0879755  0.0237487  -3.704 0.000212 ***
+## 
+## Zero-inflation model coefficients (binomial with logit link):
+##                  Estimate Std. Error z value Pr(>|z|)    
+## (Intercept)     -1.963402   0.373560  -5.256 1.47e-07 ***
+## female          -0.161139   0.101562  -1.587    0.113    
+## age_years        0.028999   0.004053   7.156 8.33e-13 ***
+## is_employed      0.060906   0.125485   0.485    0.627    
+## educationmedium -0.346316   0.243478  -1.422    0.155    
+## educationhigh   -1.589976   0.274404  -5.794 6.86e-09 ***
+## irsd_sa1        -0.276149   0.037765  -7.312 2.63e-13 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1 
+## 
+## Theta = 0.9158 
+## Number of iterations in BFGS optimization: 22 
+## Log-likelihood: -2.923e+04 on 15 Df
+```
+
+``` r
+# Compare AIC values
+aic_values <- data.frame(
+    Model = c("Linear", "Binomial", "neg_binom", "zinb"),
+    AIC = c(
+        AIC(m.total_mMETs$linear), 
+        AIC(m.total_mMETs$zeroModel), 
+        AIC(m.total_mMETs$neg_binom),
+        AIC(m.total_mMETs$zinb)
+    )
+)
+print(aic_values)
+##       Model       AIC
+## 1    Linear 58847.097
+## 2  Binomial  6650.869
+## 3 neg_binom 59029.860
+## 4      zinb 58482.976
+```
+
+The zero-inflated negative binomial model has a better fit of mMET
+hours/week to the observed values than the linear model (median Pearson
+residual of -0.4, IQR -0.7, 0.3, range -0.9 to 9), with a lower AIC
+reflecting the better fit.
 
 ### Predictions
 
@@ -722,25 +870,162 @@ MonteCarlo <- function(model, data,facetVar = NA) {
 ```
 
 ``` r
-prediction=MonteCarlo(m.total_mMETs$zeroModel,m.total_mMETs$zeroModel$data)
-confusion=prediction %>% 
-    group_by(mmet_hours_per_week_zero,zeroPrediction) %>% 
-    count()  %>%
-    group_by(mmet_hours_per_week_zero) %>%
-    mutate(percentage = n / sum(n) * 100)
-confusion
-## # A tibble: 4 × 4
-## # Groups:   mmet_hours_per_week_zero [2]
-##   mmet_hours_per_week_zero zeroPrediction     n percentage
-##                      <dbl> <lgl>          <int>      <dbl>
-## 1                        0 FALSE           5812       85.0
-## 2                        0 TRUE            1026       15.0
-## 3                        1 FALSE           1018       78.2
-## 4                        1 TRUE             283       21.8
+predicted_mmet <- predict(m.total_mMETs$zinb, type = "response")
+predicted_binary <- ifelse(predicted_mmet > 0, 1, 0)
+actual_binary <- ifelse(pa_data$mmet_hours_per_week > 0, 1, 0)
+confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
+print(confusion_matrix)
+##          Actual
+## Predicted    0    1
+##         1 1301 6838
+
+results <- data.frame(
+    predicted_mmet = predicted_mmet,
+    actual_binary = pa_data$actual_binary <- ifelse(pa_data$mmet_hours_per_week > 0, "Greater than 0", "0")
+)
+# Generate box plots
+ggplot(results, aes(x = actual_binary, y = predicted_mmet)) +
+    geom_boxplot() +
+    labs(
+        title = "Predicted mMET Hours/Week by Actual mMET Hours/Week > 0 Status",
+        x = "Actual mMET Hours/Week > 0 Status",
+        y = "Predicted mMET Hours/Week"
+    ) +
+    theme_minimal()
 ```
 
-I’ve adapted this code, but not entirely sure what we are attempting to
-achieve here; maybe we need to discuss this!
+![](jibe-melbourne-physical-activity_files/figure-commonmark/predict-total-mMETs-nhs-1.png)
+
+While the model overestimates mMET hours for those who were estimated to
+have accrued none, those with none predicted were significantly lower
+which may be a more realistic estimate. (i.e. in the real world, it may
+be unlikely that zero physical activity is conducted, some physical
+activity does occur incidentally as a result of being alive, so the
+over-estimation of the ‘zero’ observed mMET hours/week may not be such a
+problem, necessarily).
+
+But … the original zero model still did by far the best at predicting
+zeros, perhaps using the zero model with negative binomial regression
+for the over zeros would be the best model.
+
+``` r
+m.total_mMETs$neg_binom_over0 <- glm.nb(
+    mmet_hours_per_week ~ female + age_years + is_employed + education + irsd_sa1,
+    data = pa_data_over0
+)
+
+summary(m.total_mMETs$neg_binom_over0)
+## 
+## Call:
+## glm.nb(formula = mmet_hours_per_week ~ female + age_years + is_employed + 
+##     education + irsd_sa1, data = pa_data_over0, init.theta = 1.196222182, 
+##     link = log)
+## 
+## Coefficients:
+##                   Estimate Std. Error z value Pr(>|z|)    
+## (Intercept)      2.7190470  0.1223949  22.215  < 2e-16 ***
+## female          -0.2385074  0.0233173 -10.229  < 2e-16 ***
+## age_years       -0.0033029  0.0008297  -3.981 6.86e-05 ***
+## is_employed      0.0849283  0.0292899   2.900  0.00374 ** 
+## educationmedium  0.0718325  0.1095197   0.656  0.51190    
+## educationhigh    0.2274413  0.1100983   2.066  0.03885 *  
+## irsd_sa1         0.0558365  0.0086826   6.431 1.27e-10 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for Negative Binomial(1.1962) family taken to be 1)
+## 
+##     Null deviance: 7904.0  on 6837  degrees of freedom
+## Residual deviance: 7599.8  on 6831  degrees of freedom
+## AIC: 52686
+## 
+## Number of Fisher Scoring iterations: 1
+## 
+## 
+##               Theta:  1.1962 
+##           Std. Err.:  0.0205 
+## 
+##  2 x log-likelihood:  -52670.2490
+
+# Compare AIC values
+aic_values <- data.frame(
+    Model = c("Linear", "Binomial", "neg_binom", "zinb","neg_binom_over0"),
+    AIC = c(
+        AIC(m.total_mMETs$linear), 
+        AIC(m.total_mMETs$zeroModel), 
+        AIC(m.total_mMETs$neg_binom),
+        AIC(m.total_mMETs$zinb),
+        AIC(m.total_mMETs$neg_binom_over0)
+    )
+)
+print(aic_values)
+##             Model       AIC
+## 1          Linear 58847.097
+## 2        Binomial  6650.869
+## 3       neg_binom 59029.860
+## 4            zinb 58482.976
+## 5 neg_binom_over0 52686.249
+```
+
+The combination of negative binomial model with the zero model appears
+to outperform the linear model.
+
+``` r
+# Make predictions using the zero model
+predicted_probabilities <- predict(m.total_mMETs$zeroModel, type = "response")
+
+# Convert predicted probabilities to binary outcomes using a threshold of 0.5
+predicted_binary <- ifelse(predicted_probabilities > 0.5, 1, 0)
+
+# Actual binary outcomes
+actual_binary <- pa_data$mmet_hours_per_week_zero
+
+# Generate the confusion matrix
+confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
+print(confusion_matrix)
+##          Actual
+## Predicted    0    1
+##         0 6833 1299
+##         1    5    2
+```
+
+Review the combined predictions
+
+``` r
+nonzero_predictions <- predict(
+    m.total_mMETs$neg_binom_over0, 
+    type = "response", 
+    newdata = pa_data)
+combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
+
+# Evaluate the model
+actual_values <- pa_data$mmet_hours_per_week
+results <- data.frame(
+    actual_values = actual_values,
+    combined_predictions = combined_predictions
+)
+ggplot(results, aes(x = actual_values, y = combined_predictions)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+    labs(
+        title = "Scatter Plot of Actual vs. Predicted mMET Hours/Week",
+        x = "Actual mMET Hours/Week",
+        y = "Predicted mMET Hours/Week"
+    ) +
+    theme_minimal()
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/review_combined_predictions-1.png)
+
+Save the model outputs for usage later
+
+``` r
+# Get today's date
+today_date <- format(Sys.Date(), "%d%m%Y")
+
+# Save the RDS file with today's date in the filename
+saveRDS(m.total_mMETs, paste0("model_total_mMETs_", today_date, ".rds"))
+```
 
 #### Predicting mMET hours/week for synthetic population
 
@@ -796,36 +1081,35 @@ prediction=MonteCarlo(m.total_mMETs$zeroModel,data)
 table(prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 3478526  689189
+## 3478671  689044
 ```
 
 #### Join estimates back onto synthetic population
 
 ``` r
-nonzeroPP = prediction %>% filter(!zeroPrediction)
+nonzeroPP <- prediction %>% filter(!zeroPrediction)
 
-nonzeroPP_predict = nonzeroPP %>% mutate(
-    wkhrPrediction=predict.lm(m.total_mMETs$linear,nonzeroPP)
-    )
-nonzeroPP_predict = nonzeroPP_predict %>% mutate(
-    mmetHr_total=pmax(0,wkhrPrediction)
+# the non-zero mMET hours/week negative binomial regression output is on a log scale 
+# and must be exponentiated for the correct units
+nonzeroPP_predict <- nonzeroPP %>% mutate(
+    predicted_log_mmet_hours_per_week = predict(m.total_mMETs$neg_binom_over0, nonzeroPP),
+    mmetHr_total = exp(predicted_log_mmet_hours_per_week)
 )
-pp=pp%>%left_join(nonzeroPP_predict%>%select(AgentId,mmetHr_total))
-pp[is.na(pp)] <- 0
+
+pp <- pp %>% 
+      left_join(
+        nonzeroPP_predict %>% dplyr::select('AgentId','mmetHr_total')
+      )
+pp <- pp %>% mutate(
+    mmetHr_total = ifelse(is.na(mmetHr_total), 0, mmetHr_total)
+)
 summary(pp$mmetHr_total)
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##    0.00   12.64   15.85   13.80   18.30   23.31
+##    0.00   12.63   15.27   13.46   17.62   23.95
 ggplot(pp)+stat_ecdf(aes(x=mmetHr_total))
 ```
 
 ![](jibe-melbourne-physical-activity_files/figure-commonmark/synpop-prediction-outputs-1.png)
-
-``` r
-coef(m.total_mMETs$zeroinfl)
-## NULL
-coef(m.total_mMETs$zeroinfl, model = "count")
-## NULL
-```
 
 ``` r
 fwrite(pp,"pp_health_2021_withTotalMMets.csv")

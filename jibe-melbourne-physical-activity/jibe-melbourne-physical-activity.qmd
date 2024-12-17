@@ -28,7 +28,7 @@ Analysis was conducted using R 4.4.1 using a Quarto markdown document (Quarto 1.
 The following packages have been installed using renv:
 
 ```         
-renv::install(c('dplyr','data.table','ggplot2','vtable','rmarkdown'))
+renv::install(c('dplyr','data.table','ggplot2','vtable','rmarkdown','pscl'))
 ```
 
 In principle, the R environment for this notebook should be able to be restored by running
@@ -377,6 +377,8 @@ m.total_mMETs$linear <- lm(
 summary(m.total_mMETs$linear)
 ```
 
+In this model, most predicted results were slightly under-estimated compared with the observed values (median -5.6 mMET hours/week; IQR -11.7 to 6.3).
+
 #### Modelling zero mMETS hours/week
 ```{r}
 #| label: model-total-mMETS-zero
@@ -390,16 +392,70 @@ m.total_mMETs$zeroModel <- glm(
 summary(m.total_mMETs$zeroModel)
 ```
 
-Save the model outputs for usage later
-```{r}
-#| label: save-model-outputs
-#| output: true
-# Get today's date
-today_date <- format(Sys.Date(), "%d%m%Y")
 
-# Save the RDS file with today's date in the filename
-saveRDS(m.total_mMETs, paste0("model_total_mMETs_", today_date, ".rds"))
+Considering the non-normal nature of mMET hours/week, which is a positively skewed rate variable (a non-negative count of hours per week), it is worth considering whether a Poisson model might be more appropriate and provide a better fit.
+```{r}
+#| label: consider_model_for_rate_data
+#| output: true
+hist(pa_data$mmet_hours_per_week) 
+hist(log(pa_data$mmet_hours_per_week))
+summary(pa_data$mmet_hours_per_week)
+mean_mmet <- mean(pa_data$mmet_hours_per_week)
+var_mmet <- var(pa_data$mmet_hours_per_week)
+
+print(paste("Mean:", mean_mmet))
+print(paste("Variance:", var_mmet))
+if (var_mmet > 2 * mean_mmet) {
+    print("var_mmet > 2 * mean_mmet (Consider using a Negative Binomial or Zero-Inflated Negative Binomial model due to overdispersion)")
+}
 ```
+
+The model may appear appoximately normally distributed on a log scale, it also has considerably over-dispersion so a negative binomial model may be appropriate, potentially accounting for the large number of zeros.
+```{r}
+#| label: consider_alternate_models
+#| output: true
+library(MASS)
+library(pscl)
+
+m.total_mMETs$neg_binom <- glm.nb(
+    mmet_hours_per_week ~ female + age_years + is_employed + education + irsd_sa1,
+    data = pa_data
+)
+
+summary(m.total_mMETs$neg_binom)
+
+# Zero-Inflated Negative Binomial model
+pa_data$mmet_hours_per_week_round <- round(pa_data$mmet_hours_per_week)
+
+m.total_mMETs$zinb <- zeroinfl(
+    mmet_hours_per_week_round ~ female + age_years + is_employed + education + irsd_sa1 | female + age_years + is_employed + education + irsd_sa1,
+    data = pa_data,
+    dist = "negbin"
+)
+
+# Summary of the Zero-Inflated Negative Binomial model
+summary(m.total_mMETs$zinb)
+```
+
+
+```{r}
+#| label: review_models
+#| output: true
+# Compare AIC values
+aic_values <- data.frame(
+    Model = c("Linear", "Binomial", "neg_binom", "zinb"),
+    AIC = c(
+        AIC(m.total_mMETs$linear), 
+        AIC(m.total_mMETs$zeroModel), 
+        AIC(m.total_mMETs$neg_binom),
+        AIC(m.total_mMETs$zinb)
+    )
+)
+print(aic_values)
+```
+
+The zero-inflated negative binomial model has a better fit of mMET hours/week to the observed values than the linear model (median Pearson residual of -0.4, IQR -0.7, 0.3, range -0.9 to 9), with a lower AIC reflecting the better fit. 
+
 
 ### Predictions
 
@@ -419,15 +475,114 @@ MonteCarlo <- function(model, data,facetVar = NA) {
 ```{r}
 #| label: predict-total-mMETs-nhs
 #| output: true
-prediction=MonteCarlo(m.total_mMETs$zeroModel,m.total_mMETs$zeroModel$data)
-confusion=prediction %>% 
-    group_by(mmet_hours_per_week_zero,zeroPrediction) %>% 
-    count()  %>%
-    group_by(mmet_hours_per_week_zero) %>%
-    mutate(percentage = n / sum(n) * 100)
-confusion
+predicted_mmet <- predict(m.total_mMETs$zinb, type = "response")
+predicted_binary <- ifelse(predicted_mmet > 0, 1, 0)
+actual_binary <- ifelse(pa_data$mmet_hours_per_week > 0, 1, 0)
+confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
+print(confusion_matrix)
+
+results <- data.frame(
+    predicted_mmet = predicted_mmet,
+    actual_binary = pa_data$actual_binary <- ifelse(pa_data$mmet_hours_per_week > 0, "Greater than 0", "0")
+)
+# Generate box plots
+ggplot(results, aes(x = actual_binary, y = predicted_mmet)) +
+    geom_boxplot() +
+    labs(
+        title = "Predicted mMET Hours/Week by Actual mMET Hours/Week > 0 Status",
+        x = "Actual mMET Hours/Week > 0 Status",
+        y = "Predicted mMET Hours/Week"
+    ) +
+    theme_minimal()
 ```
-I've adapted this code, but not entirely sure what we are attempting to achieve here; maybe we need to discuss this!
+
+While the model overestimates mMET hours for those who were estimated to have accrued none, those with none predicted were significantly lower which may be a more realistic estimate. (i.e. in the real world, it may be unlikely that zero physical activity is conducted, some physical activity does occur incidentally as a result of being alive, so the over-estimation of the 'zero' observed mMET hours/week may not be such a problem, necessarily).
+
+But ... the original zero model still did by far the best at predicting zeros, perhaps using the zero model with negative binomial regression for the over zeros would be the best model.
+
+```{r}
+#| label: negative_binomial_model_over0
+#| output: true
+m.total_mMETs$neg_binom_over0 <- glm.nb(
+    mmet_hours_per_week ~ female + age_years + is_employed + education + irsd_sa1,
+    data = pa_data_over0
+)
+
+summary(m.total_mMETs$neg_binom_over0)
+
+# Compare AIC values
+aic_values <- data.frame(
+    Model = c("Linear", "Binomial", "neg_binom", "zinb","neg_binom_over0"),
+    AIC = c(
+        AIC(m.total_mMETs$linear), 
+        AIC(m.total_mMETs$zeroModel), 
+        AIC(m.total_mMETs$neg_binom),
+        AIC(m.total_mMETs$zinb),
+        AIC(m.total_mMETs$neg_binom_over0)
+    )
+)
+print(aic_values)
+```
+
+The combination of negative binomial model with the zero model appears to outperform the linear model.
+
+```{r}
+#| label: zero_model_confusion_matrix
+#| output: true
+
+# Make predictions using the zero model
+predicted_probabilities <- predict(m.total_mMETs$zeroModel, type = "response")
+
+# Convert predicted probabilities to binary outcomes using a threshold of 0.5
+predicted_binary <- ifelse(predicted_probabilities > 0.5, 1, 0)
+
+# Actual binary outcomes
+actual_binary <- pa_data$mmet_hours_per_week_zero
+
+# Generate the confusion matrix
+confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
+print(confusion_matrix)
+```
+
+Review the combined predictions
+```{r}
+#| label: review_combined_predictions
+#| output: true
+nonzero_predictions <- predict(
+    m.total_mMETs$neg_binom_over0, 
+    type = "response", 
+    newdata = pa_data)
+combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
+
+# Evaluate the model
+actual_values <- pa_data$mmet_hours_per_week
+results <- data.frame(
+    actual_values = actual_values,
+    combined_predictions = combined_predictions
+)
+ggplot(results, aes(x = actual_values, y = combined_predictions)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+    labs(
+        title = "Scatter Plot of Actual vs. Predicted mMET Hours/Week",
+        x = "Actual mMET Hours/Week",
+        y = "Predicted mMET Hours/Week"
+    ) +
+    theme_minimal()
+```
+
+
+Save the model outputs for usage later
+```{r}
+#| label: save-model-outputs
+#| output: true
+# Get today's date
+today_date <- format(Sys.Date(), "%d%m%Y")
+
+# Save the RDS file with today's date in the filename
+saveRDS(m.total_mMETs, paste0("model_total_mMETs_", today_date, ".rds"))
+```
+
 
 #### Predicting mMET hours/week for synthetic population
 
@@ -473,20 +628,24 @@ table(prediction$zeroPrediction)
 ```{r}
 #| label: synpop-prediction-outputs
 #| output: true
-nonzeroPP = prediction %>% filter(!zeroPrediction)
+nonzeroPP <- prediction %>% filter(!zeroPrediction)
 
-nonzeroPP_predict = nonzeroPP %>% mutate(
-    wkhrPrediction=predict.lm(m.total_mMETs$linear,nonzeroPP)
-    )
-nonzeroPP_predict = nonzeroPP_predict %>% mutate(
-    mmetHr_total=pmax(0,wkhrPrediction)
+# the non-zero mMET hours/week negative binomial regression output is on a log scale 
+# and must be exponentiated for the correct units
+nonzeroPP_predict <- nonzeroPP %>% mutate(
+    predicted_log_mmet_hours_per_week = predict(m.total_mMETs$neg_binom_over0, nonzeroPP),
+    mmetHr_total = exp(predicted_log_mmet_hours_per_week)
 )
-pp=pp%>%left_join(nonzeroPP_predict%>%select(AgentId,mmetHr_total))
-pp[is.na(pp)] <- 0
+
+pp <- pp %>% 
+      left_join(
+        nonzeroPP_predict %>% dplyr::select('AgentId','mmetHr_total')
+      )
+pp <- pp %>% mutate(
+    mmetHr_total = ifelse(is.na(mmetHr_total), 0, mmetHr_total)
+)
 summary(pp$mmetHr_total)
 ggplot(pp)+stat_ecdf(aes(x=mmetHr_total))
-coef(m.total_mMETs$zeroinfl)
-coef(m.total_mMETs$zeroinfl, model = "count")
 ```
 
 ```{r}
