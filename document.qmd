@@ -153,9 +153,9 @@ Sample of young adults and adults (over 15 years old) across all states and terr
 ```{r}
 
 # Read the data and select variables
-pa_NHS <- read_csv(paste0(getwd(),"/data/NHS/NHS17SPB.csv")) # data set with age, sex and risk factors
+pa_NHS <- data[[2]]
 
-pa_NHS  <- pa_NHS[order(pa_NHS$ABSPID),]
+# pa_NHS  <- pa_NHS[order(pa_NHS$ABSPID),]
 
 pa_NHS <- pa_NHS  %>% dplyr::select(ABSHIDB, SEX, LFSBC, USHRWKB, STDYFTPT, AGEB, EXTYPELW, EXTYPLWA, EXREGUIC, MODMINS,VIGMINS, EXLWMMIN, EXLWVMIN, WPAMMIN, WPAVMIN,
                          EXFSRMIN, LFSBC, OCCUP13B, EXREGUIC, PAG18T64, EXLWKTNO, PAG15T17, EXTRAMIN, SRBMISCR) %>% filter (AGEB > 4) ##  Only keep 18 plus data to match PA DRA and also under 15 does not have PA data

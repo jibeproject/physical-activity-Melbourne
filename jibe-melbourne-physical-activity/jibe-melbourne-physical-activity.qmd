@@ -9,17 +9,17 @@ knitr:
     collapse: true
 ---
 
-This Quarto markdown document is intended to contain code to predict physical activity for sport and recreation excluding walking and cycling, given explanatory variables (age, sex, SES, education, has car, etc) that align with the JIBE synthetic population data. This will be conducted to predict physical activity for residents of Melbourne, Australia, using the Australian Bureau of Statistics Australian National Health Survey data (2017-18).
+This Quarto markdown document is intended to contain code to predict physical activity for sport and recreation including walking and cycling, given explanatory variables (age, sex, SES, education, has car, etc) that align with the JIBE synthetic population data. This will be conducted to predict physical activity for residents of Melbourne, Australia, using the Australian Bureau of Statistics Australian National Health Survey data (2017-18).
 
 The analysis draws on Belen Zapata-Diomedi's code for cleaning the NHS dataset (../document.qmd), and Belen Zapata-Diomedi, Qin Zhang and Marina Berdokhova's code for a predictive model of marginal metabolic equivalent hours per week (mMET house/week) for Manchester, UK.
 
 To allow this code to be run on different computers and operating systems easily, rather than hardcode data paths for inputs there is a file chooser for the three key inputs used:
 
-1. ABS NHS households (NHS17HHB.csv)
-2. ABS NHS persons (NHS17PSB.csv)
-3. Melbourne synthetic population (population_final.rds)
+1.  ABS NHS households (NHS17HHB.csv)
+2.  ABS NHS persons (NHS17PSB.csv)
+3.  Melbourne synthetic population (population_final.rds)
 
-The user will be asked to provide paths for these files in this order.  If using RStudio or Visual Studio code, there should be a graphical file picker.  If using Posit or commandline on linux, you may have to enter the file path string.
+The user will be asked to provide paths for these files in this order. If using RStudio or Visual Studio code, there should be a graphical file picker. If using Posit or commandline on linux, you may have to enter the file path string.
 
 ## Dependencies
 
@@ -69,35 +69,36 @@ The household data contain geographic attributes and could potentially be used t
 
 Household variables of interest include:
 
-| Variable | Description | Comment |
+| Variable                 | Description                                                                             | Comment           |
 |------------------|----------------------|--------------------------------|
-| ABSHIDB | Household identifier | Link with persons |
-| STATE16 | State or Territory (ASGS 2016) | 2 == Victoria |
-| NUMPERBC | Number
-of persons  in household | 0, 1, 2, 3, 4, 5, 6==6+ |
-| SA1SF2DN | SEIFA - Index of Relative Socio-economic Disadvantage - 2016 - SA1 - Deciles - National |  |
+| ABSHIDB                  | Household identifier                                                                    | Link with persons |
+| STATE16                  | State or Territory (ASGS 2016)                                                          | 2 == Victoria     |
+| NUMPERBC                 | Number                                                                                  |                   |
+| of persons  in household | 0, 1, 2, 3, 4, 5, 6==6+                                                                 |                   |
+| SA1SF2DN                 | SEIFA - Index of Relative Socio-economic Disadvantage - 2016 - SA1 - Deciles - National |                   |
 
 Person-level variables of interest (see data dictionaries for detailed codes) include:
 
-| Variable | Description | Comment |
+| Variable                   | Description                             | Comment                                                                                                                                                 |
 |------------------|----------------------|--------------------------------|
-| ABSPID | Person identifier | person number within household |
-| ABSHIDB | Household identifier | Link with households, but actually does not match for CURF records |
-| AGEB | Age of person | 1== 0-4 years  … 19 == 85 years+ |
-| SEX | Sex of person | 1==Male, 2==Female |
-| LFSBC | Labour force status | 0==NA, 1==Employed, 2==Unemployed, 3==Not in the labour force |
-| HYSCHCBC | Highest year of school completed | 0==NA, 1==Postgraduate, ... 13==Never attended school |
-| HIGHLVLBC | Level of highest educational attainment | 0==NA, 1==Postgraduate, ... 13==Never attended school |
-| EMPSTAT | Labour force full-time/part-time status | 0==NA, 1==Employed full time ... 6 Not in labour force |
-|Walk for recreation (mins)| EXFSRMIN | Total minutes walked for fitness, recreation or sport in last week (for at least 10 minutes) |
-|Walk for transport (mins) | EXTRAMIN | Total minutes spent walking for transport in last week (for at least 10 minutes) |
-|Moderate exercise (mins) | EXLWMMIN | Total minutes undertaken moderate exercise last week (for example, a light jog, strenght and toning exercises, lifting small boxes and sweeping)|
-|Vigorous exercise (mins)| EXLWVMIN | Total minutes undertaken vigorous exercise last week (for example, playing basketball, running, lifting heavy boxes, and strength and toning exercises)|
+| ABSPID                     | Person identifier                       | person number within household                                                                                                                          |
+| ABSHIDB                    | Household identifier                    | Link with households, but actually does not match for CURF records                                                                                      |
+| AGEB                       | Age of person                           | 1== 0-4 years  … 19 == 85 years+                                                                                                                        |
+| SEX                        | Sex of person                           | 1==Male, 2==Female                                                                                                                                      |
+| LFSBC                      | Labour force status                     | 0==NA, 1==Employed, 2==Unemployed, 3==Not in the labour force                                                                                           |
+| HYSCHCBC                   | Highest year of school completed        | 0==NA, 1==Postgraduate, ... 13==Never attended school                                                                                                   |
+| HIGHLVLBC                  | Level of highest educational attainment | 0==NA, 1==Postgraduate, ... 13==Never attended school                                                                                                   |
+| EMPSTAT                    | Labour force full-time/part-time status | 0==NA, 1==Employed full time ... 6 Not in labour force                                                                                                  |
+| Walk for recreation (mins) | EXFSRMIN                                | Total minutes walked for fitness, recreation or sport in last week (for at least 10 minutes)                                                            |
+| Walk for transport (mins)  | EXTRAMIN                                | Total minutes spent walking for transport in last week (for at least 10 minutes)                                                                        |
+| Moderate exercise (mins)   | EXLWMMIN                                | Total minutes undertaken moderate exercise last week (for example, a light jog, strenght and toning exercises, lifting small boxes and sweeping)        |
+| Vigorous exercise (mins)   | EXLWVMIN                                | Total minutes undertaken vigorous exercise last week (for example, playing basketball, running, lifting heavy boxes, and strength and toning exercises) |
 
 ## Methods
 
 ### Read and join NHS data
-Adults aged 18 years and over from the persons dataset are left joined to the household data, with only the relevant variables retained.  The core exposure variables are renamed to enhance readability of the subsequent code.  
+
+Adults aged 18 years and over from the persons dataset are left joined to the household data, with only the relevant variables retained. The core exposure variables are renamed to enhance readability of the subsequent code.
 
 ```{r}
 #| label: load-NHS17HHB.csv-NHS17SPB.csv
@@ -110,7 +111,6 @@ data <- list(
     persons = read.csv(NHS17SPB.csv)
 )
 ```
-
 
 ```{r}
 #| label: merge-nhs-data
@@ -158,9 +158,9 @@ nhs %>% st(out='kable')
 
 ### Read and consider the synthetic population data
 
-To predict mMETs for the synthetic population, we need to understand how the variables are structured and ensure that our NHS derived data that we will use in modelling has a comparable structure.  We'll load up the data and consider a summary of variables to better understand this.
+To predict mMETs for the synthetic population, we need to understand how the variables are structured and ensure that our NHS derived data that we will use in modelling has a comparable structure. We'll load up the data and consider a summary of variables to better understand this.
 
-I am using [data.table](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html) as it is meant to be optimised for handling large datasets, like this synthetic population.  This performs subsequent operations deriving new variables much faster.
+I am using [data.table](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html) as it is meant to be optimised for handling large datasets, like this synthetic population. This performs subsequent operations deriving new variables much faster.
 
 ```{r}
 #| label: load-synthetic-population-population_final.rds
@@ -172,21 +172,20 @@ pp %>% st(out='kable')
 
 Considering the above, I think the following points are worth considering as model refinements:
 
-- Represent age in years 
-(e.g. using bracket mid-point) as "Age".  This would better model age as a continuous variable, for direct prediction using the synthetic population.  A caveat to that would be consideration of whether age is better modelled as linearly (a more parsimonious approach) or non-linearly (which its current treatment as a factor variable allows for, but complicates things and doesn't directly translate to the synthetic population variable that is continuous age in years).
-  - on the other hand, there is an `age_cat` variable, however I think the model would have more power if age could be modelled as continuous.  Having said that it will be good to consult with Belen and Qin to get their recommendations and plans for usage.
-- Represent sex as a binary indicator 'female' having 0 (male) and 1 (female)
-- Simplify employment as a binary variable "is_employed" with values of 0 (no) and 1 (yes).
-- Simplify education as a three level variable education, having values 'low', 'medium', 'high'.  While it might be that this could be represented as a pseudo continuous variable (0, 1, 2), I think its best to not assume its linear and leave it as a categorical factor variable.  Break points for low, medium and high may be subjective; need to consult what this represent in synthetic population.  For now, have assumed any tertiary education (Bachelor and higher) is high; Year 10, 11, 12, and Certificates higher than III are medium; and certificates I/II, or Year 9 or lower is low.
-- There is a variable 'IRSAD' that might be disadvantage but it ranges from -1 to 11, so is not clear what this represents (not simply deciles, and not quintiles)
-- other considerations:
-  - The synthetic population seems to have 'student' as a category in RelationshipStatus -- if that does identify someone as a student, then perhaps we can consider 'is_student' in the model for mMETs.
-  - hhSize is present in synthetic population. It may not be conceptually relevant, but is present in household data for NHS, so we could consider its appropriateness for the model.
-  - hhCar is in synethic population, but there is no data to represent this in the NHS data, that I can see.
+-   Represent age in years (e.g. using bracket mid-point) as "Age". This would better model age as a continuous variable, for direct prediction using the synthetic population. A caveat to that would be consideration of whether age is better modelled as linearly (a more parsimonious approach) or non-linearly (which its current treatment as a factor variable allows for, but complicates things and doesn't directly translate to the synthetic population variable that is continuous age in years).
+    -   on the other hand, there is an `age_cat` variable, however I think the model would have more power if age could be modelled as continuous. Having said that it will be good to consult with Belen and Qin to get their recommendations and plans for usage.
+-   Represent sex as a binary indicator 'female' having 0 (male) and 1 (female)
+-   Simplify employment as a binary variable "is_employed" with values of 0 (no) and 1 (yes).
+-   Simplify education as a three level variable education, having values 'low', 'medium', 'high'. While it might be that this could be represented as a pseudo continuous variable (0, 1, 2), I think its best to not assume its linear and leave it as a categorical factor variable. Break points for low, medium and high may be subjective; need to consult what this represent in synthetic population. For now, have assumed any tertiary education (Bachelor and higher) is high; Year 10, 11, 12, and Certificates higher than III are medium; and certificates I/II, or Year 9 or lower is low.
+-   There is a variable 'IRSAD' that might be disadvantage but it ranges from -1 to 11, so is not clear what this represents (not simply deciles, and not quintiles)
+-   other considerations:
+    -   The synthetic population seems to have 'student' as a category in RelationshipStatus -- if that does identify someone as a student, then perhaps we can consider 'is_student' in the model for mMETs.
+    -   hhSize is present in synthetic population. It may not be conceptually relevant, but is present in household data for NHS, so we could consider its appropriateness for the model.
+    -   hhCar is in synethic population, but there is no data to represent this in the NHS data, that I can see.
 
 ### Data preparation
 
-Missing data or NA values (e.g 99997 and 99998) are replaced as missing, while maximum values of walking time variables are truncated at 840 minutes to constrain influence of extreme outliers.  
+Missing data or NA values (e.g 99997 and 99998) are replaced as missing, while maximum values of walking time variables are truncated at 840 minutes to constrain influence of extreme outliers.
 
 SA1 Index of Relative Socio-economic Disadvantage (IRSD; `SA1SF2DN`) is rescaled to use quintiles rather than deciles, for consistency with the synthetic population, with '1' being most deprived and '5' being least deprived.
 
@@ -196,7 +195,7 @@ To match the synthetic population data for Melbourne a binary indicator 'is_empl
 
 Education will be summarised using categories of low, medium and high for direct comparison with the synthetic population.
 
-Marginal metabolic equivalent house per week (mMET hours/week; `mmet`) are calculated as the sum of hours spent walking for recreation, walking for transport, doing moderate exercise and doing vigorous exercise, with each respectively multiplied by the metabolic equivalent of these tasks (METs).
+Marginal metabolic equivalent houts per week (mMET hours/week; `mmet`) are calculated as the sum of hours spent walking for recreation, doing moderate exercise and doing vigorous exercise, with each respectively multiplied by the metabolic equivalent of these tasks (METs) minus one (already in MMETs in code).
 
 When deriving factor variables I have set ordered to False, as the alternative setting needlessly over-complicates the modelling (i.e. derives polynomial functions) and limits our capacity to transfer predictions for the synthetic population (see https://stackoverflow.com/questions/57297771/interpretation-of-l-q-c-4-for-logistic-regression).
 
@@ -287,24 +286,56 @@ pa_data <- nhs  %>%
     )
     )  %>%
     mutate(
-        mmet_hours_per_week=walk_recreation_min/60* MMET_WALKING +
+        mmet_hours_per_week=walk_recreation_min/60* MMET_WALKING + 
+             mod_excercise_min/60 * MMET_MOD + 
+             vig_excercise_min/60 * MMET_VIG, 
+        mmet_hours_per_week_total=walk_recreation_min/60* MMET_WALKING +
              walk_transport_min/60 * MMET_WALKING + 
              mod_excercise_min/60 * MMET_MOD + 
-             vig_excercise_min/60 * MMET_VIG
-    )  %>%
-    mutate(
+             vig_excercise_min/60 * MMET_VIG,
         mmet_hours_per_week_zero = ifelse(mmet_hours_per_week == 0, 1, 0)
     ) 
 
 pa_data %>% st(out='kable')
 ```
 
+```{r}
+
+## Summary statistics of mmets for prediction model (moderate recreational, vigorous recreational and walkint for recreation)
+mmets_1 <- pa_data %>%
+  summarise(
+    min_mmet = min(mmet_hours_per_week, na.rm = TRUE),
+    q1_mmet = quantile(mmet_hours_per_week, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet_hours_per_week, na.rm = TRUE),
+    mean_mmet = mean(mmet_hours_per_week, na.rm = TRUE),
+    q3_mmet = quantile(mmet_hours_per_week, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet_hours_per_week, na.rm = TRUE)
+  ) %>%
+  mutate(type="NHS includes moderate, vig for recreation and walking for recreation")
+
+mmets_1 
+
+## Summary statistics of mmets for comparison with Meta analysis (moderate recreational, vigorous recreational and walking for recreation and transport)
+mmets_2 <- pa_data %>%
+  summarise(
+    min_mmet = min(mmet_hours_per_week_total, na.rm = TRUE),
+    q1_mmet = quantile(mmet_hours_per_week_total, 0.25, na.rm = TRUE),
+    median_mmet = median(mmet_hours_per_week_total, na.rm = TRUE),
+    mean_mmet = mean(mmet_hours_per_week_total, na.rm = TRUE),
+    q3_mmet = quantile(mmet_hours_per_week_total, 0.75, na.rm = TRUE),
+    max_mmet = max(mmet_hours_per_week_total, na.rm = TRUE)
+  ) %>%
+  mutate(type="NHS includes moderate, vig for recreation and walking for recreation")
+
+mmets_2 
+```
+
 ### Exploratory data analysis
 
 #### Age
 
-
 mMET hours per week by age backet -- there may be some non-linearity (e.g. 18-19 year olds median METS are lower, but perhaps not meaningfully so), but broadly, younger people have higher mMETs:
+
 ```{r}
 #| label: visualise-age-distribution
 #| output: true
@@ -312,12 +343,14 @@ ggplot(pa_data,aes(x=AGEB, y=mmet_hours_per_week)) + geom_boxplot() + coord_flip
 qplot(x=pa_data$age_years,y=pa_data$mmet_hours_per_week, geom='smooth', span =0.5)
 ```
 
-Looking at the qplot, to me it seems reasonable on grounds of parsimony to model the relationship between age and mMET hours/week as a linear function.  There is a drop off after 70, however our data is relatively sparse beyond there and our last category does capture persons older than 85. Its easier to interpret the story from the qplot than boxplots too. 
+Looking at the qplot, to me it seems reasonable on grounds of parsimony to model the relationship between age and mMET hours/week as a linear function. There is a drop off after 70, however our data is relatively sparse beyond there and our last category does capture persons older than 85. Its easier to interpret the story from the qplot than boxplots too.
 
 #### Correlations
-For now I have included both education variables in the below exploratory data analysis, although most likely a derived combined variable for education will be used, pending discussion with the team.  The State variable is also included to get a sense of how variables differ across Australian states; Victorian-specific results could be expected to be mostly drawn from Melbourne, and this could be explored in a sensitivity analysis.
+
+For now I have included both education variables in the below exploratory data analysis, although most likely a derived combined variable for education will be used, pending discussion with the team. The State variable is also included to get a sense of how variables differ across Australian states; Victorian-specific results could be expected to be mostly drawn from Melbourne, and this could be explored in a sensitivity analysis.
 
 Many of our variables are factor variables for which direct numeric correlations could be misleading (i.e. they aren't necessarily ordinal or linear, e.g. labour force status, or 'NA' values in educational attainment).
+
 ```{r}
 #| label: explore-correlations
 #| output: true
@@ -328,10 +361,11 @@ correlation_matrix <- cor(cor) %>% as.data.frame()
 correlation_matrix[order(correlation_matrix$mmet_hours_per_week),] %>% round(2)
 ```
 
-None of the variables in themselves are strongly associated with mMET hours/week. As indicated above, age in years has a negative association.  Being female is similarly associated with lower mMET hours/week.   Number of persons in household and being a student were not associated with mMETs and need not be included in the model.  Employment, lower socio-economic deprivation, and higher degree of education had weak positive associations with mMET hours/week.
+None of the variables in themselves are strongly associated with mMET hours/week. As indicated above, age in years has a negative association. Being female is similarly associated with lower mMET hours/week. Number of persons in household and being a student were not associated with mMETs and need not be included in the model. Employment, lower socio-economic deprivation, and higher degree of education had weak positive associations with mMET hours/week.
 
 #### Clustering
-Persons are theoretically clustered within households.  If there is more than one person within each household, as this data structure implies, this clustering should be accounted for in the model.  The following checks the maximum number of persons within households, and confirms that only one person is associated with each household and so clustering within households will not be required in the model.
+
+Persons are theoretically clustered within households. If there is more than one person within each household, as this data structure implies, this clustering should be accounted for in the model. The following checks the maximum number of persons within households, and confirms that only one person is associated with each household and so clustering within households will not be required in the model.
 
 ```{r}
 #| label: explore-clustering
@@ -343,7 +377,9 @@ pa_data %>%
 ```
 
 #### Set up data for modelling
+
 Select relevant variables and only retain records with full data.
+
 ```{r}
 #| label: collate-modelling-data
 #| output: true
@@ -355,6 +391,7 @@ pa_data %>% st(out='kable')
 ```
 
 Copy a subset of data for persons who record at least some mMET hours/week
+
 ```{r}
 #| label: collate-modelling-positive-mMETS-data
 #| output: true
@@ -363,9 +400,11 @@ pa_data_over0 %>% st(out='kable')
 ```
 
 ### Modelling
+
 The modelling approach (and earlier data preparation) draws on code from the Manchester physical activity modelling R code file `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi and Marina Berdokhova.
 
 #### Modelling mMETS hours/week
+
 ```{r}
 #| label: model-total-mMETs
 #| output: true
@@ -380,6 +419,7 @@ summary(m.total_mMETs$linear)
 In this model, most predicted results were slightly under-estimated compared with the observed values (median -5.6 mMET hours/week; IQR -11.7 to 6.3).
 
 #### Modelling zero mMETS hours/week
+
 ```{r}
 #| label: model-total-mMETS-zero
 #| output: true
@@ -392,8 +432,8 @@ m.total_mMETs$zeroModel <- glm(
 summary(m.total_mMETs$zeroModel)
 ```
 
-
 Considering the non-normal nature of mMET hours/week, which is a positively skewed rate variable (a non-negative count of hours per week), it is worth considering whether a Poisson model might be more appropriate and provide a better fit.
+
 ```{r}
 #| label: consider_model_for_rate_data
 #| output: true
@@ -411,6 +451,7 @@ if (var_mmet > 2 * mean_mmet) {
 ```
 
 The model may appear appoximately normally distributed on a log scale, it also has considerably over-dispersion so a negative binomial model may be appropriate, potentially accounting for the large number of zeros.
+
 ```{r}
 #| label: consider_alternate_models
 #| output: true
@@ -437,7 +478,6 @@ m.total_mMETs$zinb <- zeroinfl(
 summary(m.total_mMETs$zinb)
 ```
 
-
 ```{r}
 #| label: review_models
 #| output: true
@@ -454,8 +494,7 @@ aic_values <- data.frame(
 print(aic_values)
 ```
 
-The zero-inflated negative binomial model has a better fit of mMET hours/week to the observed values than the linear model (median Pearson residual of -0.4, IQR -0.7, 0.3, range -0.9 to 9), with a lower AIC reflecting the better fit. 
-
+The zero-inflated negative binomial model has a better fit of mMET hours/week to the observed values than the linear model (median Pearson residual of -0.4, IQR -0.7, 0.3, range -0.9 to 9), with a lower AIC reflecting the better fit.
 
 ### Predictions
 
@@ -545,6 +584,7 @@ print(confusion_matrix)
 ```
 
 Review the combined predictions
+
 ```{r}
 #| label: review_combined_predictions
 #| output: true
@@ -571,8 +611,8 @@ ggplot(results, aes(x = actual_values, y = combined_predictions)) +
     theme_minimal()
 ```
 
-
 Save the model outputs for usage later
+
 ```{r}
 #| label: save-model-outputs
 #| output: true
@@ -583,10 +623,9 @@ today_date <- format(Sys.Date(), "%d%m%Y")
 saveRDS(m.total_mMETs, paste0("model_total_mMETs_", today_date, ".rds"))
 ```
 
-
 #### Predicting mMET hours/week for synthetic population
 
-Now we need to get our synthetic population data into the equivalent format to our model, e.g. by converting string categorical variables to binary indicators and adapting the SEIFA IRSD to quintiles.  Then we can use our predictions and apply them to the synthetic population.
+Now we need to get our synthetic population data into the equivalent format to our model, e.g. by converting string categorical variables to binary indicators and adapting the SEIFA IRSD to quintiles. Then we can use our predictions and apply them to the synthetic population.
 
 ```{r}
 #| label: prepare-synthetic-population-prediction
@@ -617,6 +656,7 @@ data %>% st(out='kable')
 ```
 
 #### Prediction of mMET hours/week for synethic population
+
 ```{r}
 #| label: predict-synpop-mMETs
 #| output: true
@@ -625,6 +665,7 @@ table(prediction$zeroPrediction)
 ```
 
 #### Join estimates back onto synthetic population
+
 ```{r}
 #| label: synpop-prediction-outputs
 #| output: true
