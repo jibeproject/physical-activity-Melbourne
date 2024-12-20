@@ -158,7 +158,7 @@ nhs %>% st(out='kable')
 
 ### Read and consider the synthetic population data
 
-To predict mMETs for the synthetic population, we need to understand how the variables are structured and ensure that our NHS derived data that we will use in modelling has a comparable structure. We'll load up the data and consider a summary of variables to better understand this.
+To predict recreationals mMETs for the synthetic population, we need to understand how the variables are structured and ensure that our NHS derived data that we will use in modelling has a comparable structure. We'll load up the data and consider a summary of variables to better understand this.
 
 I am using [data.table](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html) as it is meant to be optimised for handling large datasets, like this synthetic population. This performs subsequent operations deriving new variables much faster.
 
@@ -195,7 +195,7 @@ To match the synthetic population data for Melbourne a binary indicator 'is_empl
 
 Education will be summarised using categories of low, medium and high for direct comparison with the synthetic population.
 
-Marginal metabolic equivalent houts per week (mMET hours/week; `mmet`) are calculated as the sum of hours spent walking for recreation, doing moderate exercise and doing vigorous exercise, with each respectively multiplied by the metabolic equivalent of these tasks (METs) minus one (already in MMETs in code).
+Marginal metabolic equivalent hours per week (mMET hours/week; `mmet`) are calculated as the sum of hours spent walking for recreation, doing moderate exercise and doing vigorous exercise, with each respectively multiplied by the metabolic equivalent of these tasks (METs) minus one (already in MMETs in code).
 
 When deriving factor variables I have set ordered to False, as the alternative setting needlessly over-complicates the modelling (i.e. derives polynomial functions) and limits our capacity to transfer predictions for the synthetic population (see https://stackoverflow.com/questions/57297771/interpretation-of-l-q-c-4-for-logistic-regression).
 
@@ -286,51 +286,138 @@ pa_data <- nhs  %>%
     )
     )  %>%
     mutate(
-        mmet_hours_per_week=walk_recreation_min/60* MMET_WALKING + 
-             mod_excercise_min/60 * MMET_MOD + 
-             vig_excercise_min/60 * MMET_VIG, 
-        mmet_hours_per_week_total=walk_recreation_min/60* MMET_WALKING +
-             walk_transport_min/60 * MMET_WALKING + 
-             mod_excercise_min/60 * MMET_MOD + 
-             vig_excercise_min/60 * MMET_VIG,
-        mmet_hours_per_week_zero = ifelse(mmet_hours_per_week == 0, 1, 0)
+        mmet_hrs_wk_recreation =
+            walk_recreation_min/60* MMET_WALKING + 
+            mod_excercise_min/60 * MMET_MOD + 
+            vig_excercise_min/60 * MMET_VIG, 
+        mmet_hrs_wk_total = 
+            walk_transport_min/60 * MMET_WALKING + 
+            walk_recreation_min/60* MMET_WALKING +
+            mod_excercise_min/60 * MMET_MOD + 
+            vig_excercise_min/60 * MMET_VIG,
+        mmet_hrs_wk_recreation_zero = ifelse(mmet_hrs_wk_recreation == 0, 1, 0)
     ) 
 
 pa_data %>% st(out='kable')
 ```
 
+### Exploratory data analysis
+
+The following function can be used for retrieving core summary statistics that can be subsequently combined in a comparison table, for example, comparing sub-groups and overall for relevant variables, and against external reference standards.
+
 ```{r}
+summary_stats <- function(
+    data,
+    variable
+) {
+    summary.table <- data %>%
+        summarise(
+            count = sum(!is.na(get(variable))),
+            mean = mean(get(variable), na.rm = TRUE),
+            sd = sd(get(variable), na.rm = TRUE),
+            min = min(get(variable), na.rm = TRUE),
+            p25 = quantile(get(variable), 0.25, na.rm = TRUE),
+            p50 = median(get(variable), na.rm = TRUE),
+            p75 = quantile(get(variable), 0.75, na.rm = TRUE),
+            max = max(get(variable), na.rm = TRUE)
+        ) 
+    return (summary.table)
+}
 
-## Summary statistics of mmets for prediction model (moderate recreational, vigorous recreational and walkint for recreation)
-mmets_1 <- pa_data %>%
-  summarise(
-    min_mmet = min(mmet_hours_per_week, na.rm = TRUE),
-    q1_mmet = quantile(mmet_hours_per_week, 0.25, na.rm = TRUE),
-    median_mmet = median(mmet_hours_per_week, na.rm = TRUE),
-    mean_mmet = mean(mmet_hours_per_week, na.rm = TRUE),
-    q3_mmet = quantile(mmet_hours_per_week, 0.75, na.rm = TRUE),
-    max_mmet = max(mmet_hours_per_week, na.rm = TRUE)
-  ) %>%
-  mutate(type="NHS includes moderate, vig for recreation and walking for recreation")
-
-mmets_1 
-
-## Summary statistics of mmets for comparison with Meta analysis (moderate recreational, vigorous recreational and walking for recreation and transport)
-mmets_2 <- pa_data %>%
-  summarise(
-    min_mmet = min(mmet_hours_per_week_total, na.rm = TRUE),
-    q1_mmet = quantile(mmet_hours_per_week_total, 0.25, na.rm = TRUE),
-    median_mmet = median(mmet_hours_per_week_total, na.rm = TRUE),
-    mean_mmet = mean(mmet_hours_per_week_total, na.rm = TRUE),
-    q3_mmet = quantile(mmet_hours_per_week_total, 0.75, na.rm = TRUE),
-    max_mmet = max(mmet_hours_per_week_total, na.rm = TRUE)
-  ) %>%
-  mutate(type="NHS includes moderate, vig for recreation and walking for recreation")
-
-mmets_2 
+mmets_summaries <- list()
 ```
 
-### Exploratory data analysis
+#### Summary statistics of mMET hours/week for prediction model (recreation only)
+
+The variable `mmet_hrs_wk_recreation` combines moderate recreational, vigorous recreational and walking for recreation acitivies.
+
+```{r}
+desc <- "NHS (recreation)"
+var <- 'mmet_hrs_wk_recreation'
+mmets_summaries[['recreation']] = rbind(
+    cbind(
+        summary=desc, 
+        sex="Women",
+        summary_stats(pa_data %>% filter(SEX==2),var)
+    ),
+    cbind(
+        summary=desc, 
+        sex="Men",
+        summary_stats(pa_data %>% filter(SEX==1),var)
+    ),
+    cbind(
+        summary=desc, 
+        sex="Overall",
+        summary_stats(pa_data,var)
+    )
+)
+```
+
+#### Summary statistics of mmets for comparison with Meta analysis (recreational exercise, and walking for recreation and transport)
+
+The variable `mmet_hrs_wk_total` combines moderate recreational, vigorous recreational and walking for recreation and transport activities.
+
+```{r}
+desc <- "NHS (total)"
+var <- 'mmet_hrs_wk_total'
+mmets_summaries[['total']]  <- rbind(
+    cbind(
+        summary=desc, 
+        sex="Women",
+        summary_stats(pa_data %>% filter(SEX==2),var)
+    ),
+    cbind(
+        summary=desc, 
+        sex="Men",
+        summary_stats(pa_data %>% filter(SEX==1),var)
+    ),
+    cbind(
+        summary=desc, 
+        sex="Overall",
+        summary_stats(pa_data,var)
+    )
+)
+```
+
+This estimate of total mMET hours/week can support comparisons with meta-analysis results.  According to https://shiny.mrc-epid.cam.ac.uk/meta-analyses-physical-activity/ the marginal MET hours per week overall, and by sex for all-cause mortality was,
+
+
+| summary                   | sex     | count | mean   | sd | min | p25  | p50   | p75   | max    |
+|---------------------------|---------|-------|--------|----|-----|------|-------|-------|--------|
+| Meta-analysis | Men     |       | 18.698 |    | 0   | 2.73 | 10.66 | 23.87 | 156.45 |
+| Meta-analysis | Women   |       | 17.352 |    | 0   | 2.61 | 10.66 | 22.82 | 103.6  |
+| Meta-analysis | Overall |       | 16.908 |    | 0   | 2.35 | 10.5  | 22.5  | 130.02 |
+
+
+
+```{r}
+#| label: compare-mmets
+#| output: true
+
+meta_analysis_results <- data.frame(
+  summary = rep("meta-analysis (total)", 3),
+  sex = c("Men", "Women", "Overall"),
+  count = c(NA, NA, NA),
+  mean = c(18.698, 17.352, 16.908),
+  sd = c(NA, NA, NA),
+  min = c(0, 0, 0),
+  p25 = c(2.73, 2.61, 2.35),
+  p50 = c(10.66, 10.66, 10.5),
+  p75 = c(23.87, 22.82, 22.5),
+  max = c(156.45, 103.6, 130.02)
+)
+
+mmets_comparison <- rbind(
+        rbindlist(mmets_summaries),
+        meta_analysis_results
+    )
+options(knitr.kable.NA = '-')
+knitr::kable(
+    mmets_comparison,
+    caption = "Marginal MET hours per week",
+    digits=3
+)
+```
 
 #### Age
 
@@ -339,8 +426,8 @@ mMET hours per week by age backet -- there may be some non-linearity (e.g. 18-19
 ```{r}
 #| label: visualise-age-distribution
 #| output: true
-ggplot(pa_data,aes(x=AGEB, y=mmet_hours_per_week)) + geom_boxplot() + coord_flip()
-qplot(x=pa_data$age_years,y=pa_data$mmet_hours_per_week, geom='smooth', span =0.5)
+ggplot(pa_data,aes(x=AGEB, y=mmet_hrs_wk_recreation)) + geom_boxplot() + coord_flip()
+qplot(x=pa_data$age_years,y=pa_data$mmet_hrs_wk_recreation, geom='smooth', span =0.5)
 ```
 
 Looking at the qplot, to me it seems reasonable on grounds of parsimony to model the relationship between age and mMET hours/week as a linear function. There is a drop off after 70, however our data is relatively sparse beyond there and our last category does capture persons older than 85. Its easier to interpret the story from the qplot than boxplots too.
@@ -354,11 +441,11 @@ Many of our variables are factor variables for which direct numeric correlations
 ```{r}
 #| label: explore-correlations
 #| output: true
-cor=as.data.frame(lapply(pa_data[, c("irsd_sa1", "age_years", "female", "is_employed", "is_student", "education", "NUMPERBC", "mmet_hours_per_week")], as.numeric))
+cor=as.data.frame(lapply(pa_data[, c("irsd_sa1", "age_years", "female", "is_employed", "is_student", "education", "NUMPERBC", "mmet_hrs_wk_recreation")], as.numeric))
 cor=na.omit(cor)
 correlation_matrix <- cor(cor) %>% as.data.frame()
 # corrplot(correlation_matrix %>% as.double(), method = "number",order = "FPC",type="lower") 
-correlation_matrix[order(correlation_matrix$mmet_hours_per_week),] %>% round(2)
+correlation_matrix[order(correlation_matrix$mmet_hrs_wk_recreation),] %>% round(2)
 ```
 
 None of the variables in themselves are strongly associated with mMET hours/week. As indicated above, age in years has a negative association. Being female is similarly associated with lower mMET hours/week. Number of persons in household and being a student were not associated with mMETs and need not be included in the model. Employment, lower socio-economic deprivation, and higher degree of education had weak positive associations with mMET hours/week.
@@ -384,7 +471,7 @@ Select relevant variables and only retain records with full data.
 #| label: collate-modelling-data
 #| output: true
 pa_data =pa_data%>%
-  select(ABSPID, age_years, female, is_employed, education, irsd_sa1, mmet_hours_per_week, mmet_hours_per_week_zero)%>%
+  select(ABSPID, age_years, female, is_employed, education, irsd_sa1, mmet_hrs_wk_recreation, mmet_hrs_wk_recreation_zero)%>%
   na.omit()
 
 pa_data %>% st(out='kable')
@@ -395,7 +482,7 @@ Copy a subset of data for persons who record at least some mMET hours/week
 ```{r}
 #| label: collate-modelling-positive-mMETS-data
 #| output: true
-pa_data_over0=pa_data[pa_data$mmet_hours_per_week>0,]
+pa_data_over0=pa_data[pa_data$mmet_hrs_wk_recreation>0,]
 pa_data_over0 %>% st(out='kable')
 ```
 
@@ -408,12 +495,12 @@ The modelling approach (and earlier data preparation) draws on code from the Man
 ```{r}
 #| label: model-total-mMETs
 #| output: true
-m.total_mMETs <- list()
+m.mMETs_recreational <- list()
 
-m.total_mMETs$linear <- lm(
-    mmet_hours_per_week ~ female+age_years+is_employed+education+irsd_sa1,
+m.mMETs_recreational$linear <- lm(
+    mmet_hrs_wk_recreation ~ female+age_years+is_employed+education+irsd_sa1,
     data = pa_data_over0)
-summary(m.total_mMETs$linear)
+summary(m.mMETs_recreational$linear)
 ```
 
 In this model, most predicted results were slightly under-estimated compared with the observed values (median -5.6 mMET hours/week; IQR -11.7 to 6.3).
@@ -423,13 +510,13 @@ In this model, most predicted results were slightly under-estimated compared wit
 ```{r}
 #| label: model-total-mMETS-zero
 #| output: true
-m.total_mMETs$zeroModel <- glm(
-    mmet_hours_per_week_zero ~ female+age_years+is_employed+education+irsd_sa1,
+m.mMETs_recreational$zeroModel <- glm(
+    mmet_hrs_wk_recreation_zero ~ female+age_years+is_employed+education+irsd_sa1,
     family = "binomial",
     data = pa_data
 )
 
-summary(m.total_mMETs$zeroModel)
+summary(m.mMETs_recreational$zeroModel)
 ```
 
 Considering the non-normal nature of mMET hours/week, which is a positively skewed rate variable (a non-negative count of hours per week), it is worth considering whether a Poisson model might be more appropriate and provide a better fit.
@@ -437,11 +524,11 @@ Considering the non-normal nature of mMET hours/week, which is a positively skew
 ```{r}
 #| label: consider_model_for_rate_data
 #| output: true
-hist(pa_data$mmet_hours_per_week) 
-hist(log(pa_data$mmet_hours_per_week))
-summary(pa_data$mmet_hours_per_week)
-mean_mmet <- mean(pa_data$mmet_hours_per_week)
-var_mmet <- var(pa_data$mmet_hours_per_week)
+hist(pa_data$mmet_hrs_wk_recreation) 
+hist(log(pa_data$mmet_hrs_wk_recreation))
+summary(pa_data$mmet_hrs_wk_recreation)
+mean_mmet <- mean(pa_data$mmet_hrs_wk_recreation)
+var_mmet <- var(pa_data$mmet_hrs_wk_recreation)
 
 print(paste("Mean:", mean_mmet))
 print(paste("Variance:", var_mmet))
@@ -458,24 +545,24 @@ The model may appear appoximately normally distributed on a log scale, it also h
 library(MASS)
 library(pscl)
 
-m.total_mMETs$neg_binom <- glm.nb(
-    mmet_hours_per_week ~ female + age_years + is_employed + education + irsd_sa1,
+m.mMETs_recreational$neg_binom <- glm.nb(
+    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1,
     data = pa_data
 )
 
-summary(m.total_mMETs$neg_binom)
+summary(m.mMETs_recreational$neg_binom)
 
 # Zero-Inflated Negative Binomial model
-pa_data$mmet_hours_per_week_round <- round(pa_data$mmet_hours_per_week)
+pa_data$mmet_hrs_wk_recreation_round <- round(pa_data$mmet_hrs_wk_recreation)
 
-m.total_mMETs$zinb <- zeroinfl(
-    mmet_hours_per_week_round ~ female + age_years + is_employed + education + irsd_sa1 | female + age_years + is_employed + education + irsd_sa1,
+m.mMETs_recreational$zinb <- zeroinfl(
+    mmet_hrs_wk_recreation_round ~ female + age_years + is_employed + education + irsd_sa1 | female + age_years + is_employed + education + irsd_sa1,
     data = pa_data,
     dist = "negbin"
 )
 
 # Summary of the Zero-Inflated Negative Binomial model
-summary(m.total_mMETs$zinb)
+summary(m.mMETs_recreational$zinb)
 ```
 
 ```{r}
@@ -485,10 +572,10 @@ summary(m.total_mMETs$zinb)
 aic_values <- data.frame(
     Model = c("Linear", "Binomial", "neg_binom", "zinb"),
     AIC = c(
-        AIC(m.total_mMETs$linear), 
-        AIC(m.total_mMETs$zeroModel), 
-        AIC(m.total_mMETs$neg_binom),
-        AIC(m.total_mMETs$zinb)
+        AIC(m.mMETs_recreational$linear), 
+        AIC(m.mMETs_recreational$zeroModel), 
+        AIC(m.mMETs_recreational$neg_binom),
+        AIC(m.mMETs_recreational$zinb)
     )
 )
 print(aic_values)
@@ -514,15 +601,15 @@ MonteCarlo <- function(model, data,facetVar = NA) {
 ```{r}
 #| label: predict-total-mMETs-nhs
 #| output: true
-predicted_mmet <- predict(m.total_mMETs$zinb, type = "response")
+predicted_mmet <- predict(m.mMETs_recreational$zinb, type = "response")
 predicted_binary <- ifelse(predicted_mmet > 0, 1, 0)
-actual_binary <- ifelse(pa_data$mmet_hours_per_week > 0, 1, 0)
+actual_binary <- ifelse(pa_data$mmet_hrs_wk_recreation > 0, 1, 0)
 confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
 print(confusion_matrix)
 
 results <- data.frame(
     predicted_mmet = predicted_mmet,
-    actual_binary = pa_data$actual_binary <- ifelse(pa_data$mmet_hours_per_week > 0, "Greater than 0", "0")
+    actual_binary = pa_data$actual_binary <- ifelse(pa_data$mmet_hrs_wk_recreation > 0, "Greater than 0", "0")
 )
 # Generate box plots
 ggplot(results, aes(x = actual_binary, y = predicted_mmet)) +
@@ -542,22 +629,22 @@ But ... the original zero model still did by far the best at predicting zeros, p
 ```{r}
 #| label: negative_binomial_model_over0
 #| output: true
-m.total_mMETs$neg_binom_over0 <- glm.nb(
-    mmet_hours_per_week ~ female + age_years + is_employed + education + irsd_sa1,
+m.mMETs_recreational$neg_binom_over0 <- glm.nb(
+    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1,
     data = pa_data_over0
 )
 
-summary(m.total_mMETs$neg_binom_over0)
+summary(m.mMETs_recreational$neg_binom_over0)
 
 # Compare AIC values
 aic_values <- data.frame(
     Model = c("Linear", "Binomial", "neg_binom", "zinb","neg_binom_over0"),
     AIC = c(
-        AIC(m.total_mMETs$linear), 
-        AIC(m.total_mMETs$zeroModel), 
-        AIC(m.total_mMETs$neg_binom),
-        AIC(m.total_mMETs$zinb),
-        AIC(m.total_mMETs$neg_binom_over0)
+        AIC(m.mMETs_recreational$linear), 
+        AIC(m.mMETs_recreational$zeroModel), 
+        AIC(m.mMETs_recreational$neg_binom),
+        AIC(m.mMETs_recreational$zinb),
+        AIC(m.mMETs_recreational$neg_binom_over0)
     )
 )
 print(aic_values)
@@ -570,13 +657,13 @@ The combination of negative binomial model with the zero model appears to outper
 #| output: true
 
 # Make predictions using the zero model
-predicted_probabilities <- predict(m.total_mMETs$zeroModel, type = "response")
+predicted_probabilities <- predict(m.mMETs_recreational$zeroModel, type = "response")
 
 # Convert predicted probabilities to binary outcomes using a threshold of 0.5
 predicted_binary <- ifelse(predicted_probabilities > 0.5, 1, 0)
 
 # Actual binary outcomes
-actual_binary <- pa_data$mmet_hours_per_week_zero
+actual_binary <- pa_data$mmet_hrs_wk_recreation_zero
 
 # Generate the confusion matrix
 confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
@@ -589,13 +676,13 @@ Review the combined predictions
 #| label: review_combined_predictions
 #| output: true
 nonzero_predictions <- predict(
-    m.total_mMETs$neg_binom_over0, 
+    m.mMETs_recreational$neg_binom_over0, 
     type = "response", 
     newdata = pa_data)
 combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
 
 # Evaluate the model
-actual_values <- pa_data$mmet_hours_per_week
+actual_values <- pa_data$mmet_hrs_wk_recreation
 results <- data.frame(
     actual_values = actual_values,
     combined_predictions = combined_predictions
@@ -620,7 +707,7 @@ Save the model outputs for usage later
 today_date <- format(Sys.Date(), "%d%m%Y")
 
 # Save the RDS file with today's date in the filename
-saveRDS(m.total_mMETs, paste0("model_total_mMETs_", today_date, ".rds"))
+saveRDS(m.mMETs_recreational, paste0("model_total_mMETs_", today_date, ".rds"))
 ```
 
 #### Predicting mMET hours/week for synthetic population
@@ -660,7 +747,7 @@ data %>% st(out='kable')
 ```{r}
 #| label: predict-synpop-mMETs
 #| output: true
-prediction=MonteCarlo(m.total_mMETs$zeroModel,data)
+prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
 table(prediction$zeroPrediction)
 ```
 
@@ -674,19 +761,19 @@ nonzeroPP <- prediction %>% filter(!zeroPrediction)
 # the non-zero mMET hours/week negative binomial regression output is on a log scale 
 # and must be exponentiated for the correct units
 nonzeroPP_predict <- nonzeroPP %>% mutate(
-    predicted_log_mmet_hours_per_week = predict(m.total_mMETs$neg_binom_over0, nonzeroPP),
-    mmetHr_total = exp(predicted_log_mmet_hours_per_week)
+    predicted_log_mmet_hrs_wk_recreation = predict(m.mMETs_recreational$neg_binom_over0, nonzeroPP),
+    mMETs_recreational = exp(predicted_log_mmet_hrs_wk_recreation)
 )
 
 pp <- pp %>% 
       left_join(
-        nonzeroPP_predict %>% dplyr::select('AgentId','mmetHr_total')
+        nonzeroPP_predict %>% dplyr::select('AgentId','mMETs_recreational')
       )
 pp <- pp %>% mutate(
-    mmetHr_total = ifelse(is.na(mmetHr_total), 0, mmetHr_total)
+    mMETs_recreational = ifelse(is.na(mMETs_recreational), 0, mMETs_recreational)
 )
-summary(pp$mmetHr_total)
-ggplot(pp)+stat_ecdf(aes(x=mmetHr_total))
+summary(pp$mMETs_recreational)
+ggplot(pp)+stat_ecdf(aes(x=mMETs_recreational))
 ```
 
 ```{r}
@@ -696,14 +783,49 @@ fwrite(pp,"pp_health_2021_withTotalMMets.csv")
 ```
 
 ```{r}
-#| label: boxplot-mmetHr_total
+#| label: boxplot-mMETs_recreational
 #| output: true
 # Layout to split the screen
 layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(1,8))
  
 # Draw the boxplot and the histogram 
 par(mar=c(0, 3.1, 1.1, 2.1))
-boxplot(pp$mmetHr_total, horizontal=TRUE , ylim=c(0,30), xaxt="n" , col=rgb(0.8,0.8,0,0.5) , frame=F)
+boxplot(pp$mMETs_recreational, horizontal=TRUE , ylim=c(0,30), xaxt="n" , col=rgb(0.8,0.8,0,0.5) , frame=F)
 par(mar=c(4, 3.1, 1.1, 2.1))
-hist(pp$mmetHr_total, breaks=40 , col=rgb(0.2,0.8,0.5,0.5) , border=F , main="" , xlab="Predicted mMET hours/week", xlim=c(0,30))
+hist(pp$mMETs_recreational, breaks=40 , col=rgb(0.2,0.8,0.5,0.5) , border=F , main="" , xlab="Predicted mMET hours/week", xlim=c(0,30))
+```
+
+#### Combined comparison
+
+```{r}
+#| label: overall-mMETs-comparison
+#| output: true
+desc <- "Synthetic population (recreation)"
+var <- 'mMETs_recreational'
+mmets_comparison <- rbind(
+    mmets_comparison,
+    cbind(
+        summary=desc, 
+        sex="Women",
+        summary_stats(pp %>% filter(Gender=='Female'),var)
+    ),
+    cbind(
+        summary=desc, 
+        sex="Men",
+        summary_stats(pp %>% filter(Gender=='Male'),var)
+    ),
+    cbind(
+        summary=desc, 
+        sex="Overall",
+        summary_stats(pp,var)
+    )
+)
+
+options(knitr.kable.NA = '-')
+knitr::kable(
+    mmets_comparison,
+    caption = "Marginal MET hours per week",
+    digits=2
+)
+
 ```
