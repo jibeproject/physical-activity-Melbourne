@@ -775,12 +775,13 @@ ggplot(pp)+stat_ecdf(aes(x=mMETs_recreational))
 ```{r}
 #| label: save-predicted-mMETS-synpop
 #| output: true
-fwrite(pp,"pp_health_2021_withTotalMMets.csv")
+fwrite(pp,"pp_health_2021_mMETS_recreational.csv")
 ```
 
 ```{r}
 #| label: boxplot-mMETs_recreational
 #| output: true
+
 # Layout to split the screen
 layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(1,8))
  

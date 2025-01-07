@@ -1216,7 +1216,7 @@ prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
 table(prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 2747770 1419945
+## 2747986 1419729
 ```
 
 #### Join estimates back onto synthetic population
@@ -1237,14 +1237,14 @@ pp <- pp %>% mutate(
 )
 summary(pp$mMETs_recreational)
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##    0.00    0.00   13.42   10.26   16.65   21.34
+##    0.00    0.00   13.42   10.26   16.66   21.29
 ggplot(pp)+stat_ecdf(aes(x=mMETs_recreational))
 ```
 
 ![](jibe-melbourne-physical-activity_files/figure-commonmark/synpop-prediction-outputs-1.png)
 
 ``` r
-fwrite(pp,"pp_health_2021_withTotalMMets.csv")
+fwrite(pp,"pp_health_2021_mMETS_recreational.csv")
 ```
 
 ``` r
@@ -1303,9 +1303,9 @@ knitr::kable(
 | NHS (recreation) | Men | 7575 | 11.47 | 17.20 | 0 | 0.00 | 4.00 | 16.50 | 147.00 |
 | NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 3.60 | 12.25 | 182.00 |
 | NHS (recreation) | Overall | 16359 | 10.05 | 15.48 | 0 | 0.00 | 3.75 | 14.00 | 182.00 |
-| Synthetic population (recreation) | Men | 2045535 | 11.81 | 8.49 | 0 | 0.00 | 16.71 | 18.33 | 21.34 |
+| Synthetic population (recreation) | Men | 2045535 | 11.81 | 8.49 | 0 | 0.00 | 16.72 | 18.33 | 21.29 |
 | Synthetic population (recreation) | Women | 2128562 | 8.77 | 6.54 | 0 | 0.00 | 12.27 | 14.04 | 16.96 |
-| Synthetic population (recreation) | Overall | 4174097 | 10.26 | 7.71 | 0 | 0.00 | 13.42 | 16.65 | 21.34 |
+| Synthetic population (recreation) | Overall | 4174097 | 10.26 | 7.71 | 0 | 0.00 | 13.42 | 16.66 | 21.29 |
 
 Marginal MET hours per week
 
