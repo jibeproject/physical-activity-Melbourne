@@ -990,11 +990,6 @@ print(aic_values)
 ## 4      zinb 51955.672
 ```
 
-The zero-inflated negative binomial model has a better fit of mMET
-hours/week to the observed values than the linear model (median Pearson
-residual of -0.4, IQR -0.7, 0.3, range -0.9 to 9), with a lower AIC
-reflecting the better fit.
-
 ### Predictions
 
 ``` r
@@ -1221,7 +1216,7 @@ prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
 table(prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 2748408 1419307
+## 2747770 1419945
 ```
 
 #### Join estimates back onto synthetic population
@@ -1242,7 +1237,7 @@ pp <- pp %>% mutate(
 )
 summary(pp$mMETs_recreational)
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##    0.00    0.00   13.42   10.26   16.66   21.34
+##    0.00    0.00   13.42   10.26   16.65   21.34
 ggplot(pp)+stat_ecdf(aes(x=mMETs_recreational))
 ```
 
@@ -1309,8 +1304,8 @@ knitr::kable(
 | NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 3.60 | 12.25 | 182.00 |
 | NHS (recreation) | Overall | 16359 | 10.05 | 15.48 | 0 | 0.00 | 3.75 | 14.00 | 182.00 |
 | Synthetic population (recreation) | Men | 2045535 | 11.81 | 8.49 | 0 | 0.00 | 16.71 | 18.33 | 21.34 |
-| Synthetic population (recreation) | Women | 2128562 | 8.78 | 6.54 | 0 | 0.00 | 12.27 | 14.04 | 16.96 |
-| Synthetic population (recreation) | Overall | 4174097 | 10.26 | 7.71 | 0 | 0.00 | 13.42 | 16.66 | 21.34 |
+| Synthetic population (recreation) | Women | 2128562 | 8.77 | 6.54 | 0 | 0.00 | 12.27 | 14.04 | 16.96 |
+| Synthetic population (recreation) | Overall | 4174097 | 10.26 | 7.71 | 0 | 0.00 | 13.42 | 16.65 | 21.34 |
 
 Marginal MET hours per week
 
@@ -1344,7 +1339,8 @@ was the case regardless of using a linear model (as currently used, for
 comparability with the Manchester approach) or a negative binomial model
 (which resulted in similar if slightly reduced estimates, approximately
 1 mMET hour/week lower). Given the similarity, the simpler model may be
-perferable.
+preferred, and hence was ultimately used despite the earlier exploratory
+analysis.
 
 The resulting synthetic population estimates for mMET hours/week
 arguably make sense as these are estimates based on average effects
