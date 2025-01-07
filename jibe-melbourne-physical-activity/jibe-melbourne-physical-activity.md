@@ -515,13 +515,13 @@ var <- 'mmet_hrs_wk_recreation'
 mmets_summaries[['recreation']] = rbind(
     cbind(
         summary=desc, 
-        sex="Women",
-        summary_stats(pa_data %>% filter(SEX==2),var)
+        sex="Men",
+        summary_stats(pa_data %>% filter(SEX==1),var)
     ),
     cbind(
         summary=desc, 
-        sex="Men",
-        summary_stats(pa_data %>% filter(SEX==1),var)
+        sex="Women",
+        summary_stats(pa_data %>% filter(SEX==2),var)
     ),
     cbind(
         summary=desc, 
@@ -543,13 +543,13 @@ var <- 'mmet_hrs_wk_total'
 mmets_summaries[['total']]  <- rbind(
     cbind(
         summary=desc, 
-        sex="Women",
-        summary_stats(pa_data %>% filter(SEX==2),var)
+        sex="Men",
+        summary_stats(pa_data %>% filter(SEX==1),var)
     ),
     cbind(
         summary=desc, 
-        sex="Men",
-        summary_stats(pa_data %>% filter(SEX==1),var)
+        sex="Women",
+        summary_stats(pa_data %>% filter(SEX==2),var)
     ),
     cbind(
         summary=desc, 
@@ -586,8 +586,9 @@ meta_analysis_results <- data.frame(
 )
 
 mmets_comparison <- rbind(
-        rbindlist(mmets_summaries),
-        meta_analysis_results
+        meta_analysis_results,
+        mmets_summaries[['total']],
+        mmets_summaries[['recreation']]
     )
 options(knitr.kable.NA = '-')
 knitr::kable(
@@ -599,15 +600,15 @@ knitr::kable(
 
 | summary               | sex     | count |   mean |     sd | min |  p25 |    p50 |    p75 |    max |
 |:----------------------|:--------|------:|-------:|-------:|----:|-----:|-------:|-------:|-------:|
-| NHS (recreation)      | Women   |  8784 |  8.815 | 13.720 |   0 | 0.00 |  3.604 | 12.250 | 182.00 |
-| NHS (recreation)      | Men     |  7575 | 11.473 | 17.196 |   0 | 0.00 |  4.000 | 16.500 | 147.00 |
-| NHS (recreation)      | Overall | 16359 | 10.046 | 15.484 |   0 | 0.00 |  3.750 | 14.000 | 182.00 |
-| NHS (total)           | Women   |  8766 | 11.574 | 15.331 |   0 | 1.25 |  6.250 | 16.083 | 207.00 |
-| NHS (total)           | Men     |  7552 | 14.476 | 18.868 |   0 | 1.25 |  7.500 | 21.000 | 153.00 |
-| NHS (total)           | Overall | 16318 | 12.917 | 17.120 |   0 | 1.25 |  6.667 | 17.500 | 207.00 |
 | meta-analysis (total) | Men     |    \- | 18.698 |     \- |   0 | 2.73 | 10.660 | 23.870 | 156.45 |
 | meta-analysis (total) | Women   |    \- | 17.352 |     \- |   0 | 2.61 | 10.660 | 22.820 | 103.60 |
 | meta-analysis (total) | Overall |    \- | 16.908 |     \- |   0 | 2.35 | 10.500 | 22.500 | 130.02 |
+| NHS (total)           | Men     |  7552 | 14.476 | 18.868 |   0 | 1.25 |  7.500 | 21.000 | 153.00 |
+| NHS (total)           | Women   |  8766 | 11.574 | 15.331 |   0 | 1.25 |  6.250 | 16.083 | 207.00 |
+| NHS (total)           | Overall | 16318 | 12.917 | 17.120 |   0 | 1.25 |  6.667 | 17.500 | 207.00 |
+| NHS (recreation)      | Men     |  7575 | 11.473 | 17.196 |   0 | 0.00 |  4.000 | 16.500 | 147.00 |
+| NHS (recreation)      | Women   |  8784 |  8.815 | 13.720 |   0 | 0.00 |  3.604 | 12.250 | 182.00 |
+| NHS (recreation)      | Overall | 16359 | 10.046 | 15.484 |   0 | 0.00 |  3.750 | 14.000 | 182.00 |
 
 Marginal MET hours per week
 
@@ -1220,7 +1221,7 @@ prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
 table(prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 2747690 1420025
+## 2748408 1419307
 ```
 
 #### Join estimates back onto synthetic population
@@ -1228,11 +1229,8 @@ table(prediction$zeroPrediction)
 ``` r
 nonzeroPP <- prediction %>% filter(!zeroPrediction)
 
-# the non-zero mMET hours/week negative binomial regression output is on a log scale 
-# and must be exponentiated for the correct units
 nonzeroPP_predict <- nonzeroPP %>% mutate(
-    predicted_log_mmet_hrs_wk_recreation = predict(m.mMETs_recreational$neg_binom_over0, nonzeroPP),
-    mMETs_recreational = exp(predicted_log_mmet_hrs_wk_recreation)
+    mMETs_recreational = predict(m.mMETs_recreational$linear, nonzeroPP)
 )
 
 pp <- pp %>% 
@@ -1244,7 +1242,7 @@ pp <- pp %>% mutate(
 )
 summary(pp$mMETs_recreational)
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##    0.00    0.00   13.20   10.04   16.06   21.64
+##    0.00    0.00   13.42   10.26   16.66   21.34
 ggplot(pp)+stat_ecdf(aes(x=mMETs_recreational))
 ```
 
@@ -1276,13 +1274,13 @@ mmets_comparison <- rbind(
     mmets_comparison,
     cbind(
         summary=desc, 
-        sex="Women",
-        summary_stats(pp %>% filter(Gender=='Female'),var)
+        sex="Men",
+        summary_stats(pp %>% filter(Gender=='Male'),var)
     ),
     cbind(
         summary=desc, 
-        sex="Men",
-        summary_stats(pp %>% filter(Gender=='Male'),var)
+        sex="Women",
+        summary_stats(pp %>% filter(Gender=='Female'),var)
     ),
     cbind(
         summary=desc, 
@@ -1301,17 +1299,61 @@ knitr::kable(
 
 | summary | sex | count | mean | sd | min | p25 | p50 | p75 | max |
 |:---|:---|---:|---:|---:|---:|---:|---:|---:|---:|
-| NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 3.60 | 12.25 | 182.00 |
-| NHS (recreation) | Men | 7575 | 11.47 | 17.20 | 0 | 0.00 | 4.00 | 16.50 | 147.00 |
-| NHS (recreation) | Overall | 16359 | 10.05 | 15.48 | 0 | 0.00 | 3.75 | 14.00 | 182.00 |
-| NHS (total) | Women | 8766 | 11.57 | 15.33 | 0 | 1.25 | 6.25 | 16.08 | 207.00 |
-| NHS (total) | Men | 7552 | 14.48 | 18.87 | 0 | 1.25 | 7.50 | 21.00 | 153.00 |
-| NHS (total) | Overall | 16318 | 12.92 | 17.12 | 0 | 1.25 | 6.67 | 17.50 | 207.00 |
 | meta-analysis (total) | Men | \- | 18.70 | \- | 0 | 2.73 | 10.66 | 23.87 | 156.45 |
 | meta-analysis (total) | Women | \- | 17.35 | \- | 0 | 2.61 | 10.66 | 22.82 | 103.60 |
 | meta-analysis (total) | Overall | \- | 16.91 | \- | 0 | 2.35 | 10.50 | 22.50 | 130.02 |
-| Synthetic population (recreation) | Women | 2128562 | 8.70 | 6.45 | 0 | 0.00 | 12.30 | 13.74 | 16.70 |
-| Synthetic population (recreation) | Men | 2045535 | 11.44 | 8.25 | 0 | 0.00 | 16.02 | 17.73 | 21.64 |
-| Synthetic population (recreation) | Overall | 4174097 | 10.04 | 7.52 | 0 | 0.00 | 13.20 | 16.06 | 21.64 |
+| NHS (total) | Men | 7552 | 14.48 | 18.87 | 0 | 1.25 | 7.50 | 21.00 | 153.00 |
+| NHS (total) | Women | 8766 | 11.57 | 15.33 | 0 | 1.25 | 6.25 | 16.08 | 207.00 |
+| NHS (total) | Overall | 16318 | 12.92 | 17.12 | 0 | 1.25 | 6.67 | 17.50 | 207.00 |
+| NHS (recreation) | Men | 7575 | 11.47 | 17.20 | 0 | 0.00 | 4.00 | 16.50 | 147.00 |
+| NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 3.60 | 12.25 | 182.00 |
+| NHS (recreation) | Overall | 16359 | 10.05 | 15.48 | 0 | 0.00 | 3.75 | 14.00 | 182.00 |
+| Synthetic population (recreation) | Men | 2045535 | 11.81 | 8.49 | 0 | 0.00 | 16.71 | 18.33 | 21.34 |
+| Synthetic population (recreation) | Women | 2128562 | 8.78 | 6.54 | 0 | 0.00 | 12.27 | 14.04 | 16.96 |
+| Synthetic population (recreation) | Overall | 4174097 | 10.26 | 7.71 | 0 | 0.00 | 13.42 | 16.66 | 21.34 |
 
 Marginal MET hours per week
+
+Comparing the meta-analysis estimates for gender-stratified physical
+activity mMET hours/week to those in the Australian NHS data, the latter
+has broadly similar if slightly lower estimates overall; approximately 4
+mMET-hours/week lower (albeit, with substantial variation). Conversely,
+the maximum recorded mMET/hours were higher in the NHS data than in the
+meta-analysis. While gender-specific trends were broadly similar (women
+on average recording lower mMET hours/week in both the meta-analysis and
+NHS total and recreation estimates), the maximum mMET hours/week for
+women was higher for women in the Australian NHS sample. It is worth
+noting the limitation of the Australian NHS data that it is national and
+not restricted to an urban population; this could be an important
+difference, if cohort studies tend to have an urban focus.
+
+The modelled estimates for recreational mMET hours/week were similar on
+average to the NHS data from which they were based (similar means by sex
+and overall). As the estimates were based on modelled averages, the
+reduced variability by sex and overall is not surprising. The median
+(and 75th percentile, to a lesser degree) of the synthetic population
+estimates were substantially higher than the NHS data they were modelled
+from. This may relate to demographic differences with the synthetic
+population reflecting demographics of an urban population in Melbourne,
+compared with the NHS data’s national population. Likely it also
+reflects aspects of the modelling approach: the hurdle design’s binomial
+model appears to effectively model the propensity to undertake any
+recreational physical activity (i.e. the zeros) but the modelling of
+mMET hours/week may otherwise approximate a normal distribution. This
+was the case regardless of using a linear model (as currently used, for
+comparability with the Manchester approach) or a negative binomial model
+(which resulted in similar if slightly reduced estimates, approximately
+1 mMET hour/week lower). Given the similarity, the simpler model may be
+perferable.
+
+The resulting synthetic population estimates for mMET hours/week
+arguably make sense as these are estimates based on average effects
+given demographic covariates, not true results for individuals. They are
+by definition, according to the methods used, normative. Therefore it is
+not suprising the long tail of maximum mMET hours in the meta-analysis
+and NHS survey data is truncated to approximately 20 mMET hours/week.
+Despite not representing the full and skewed distribution of mMET
+hours/week that would be expected in the population, if the purpose of
+the synthetic population is for inference on average effects for the
+basic range of included covariates, these estimates should be adequate
+for usage as exposures in the health modelling.

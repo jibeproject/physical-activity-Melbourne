@@ -337,13 +337,13 @@ var <- 'mmet_hrs_wk_recreation'
 mmets_summaries[['recreation']] = rbind(
     cbind(
         summary=desc, 
-        sex="Women",
-        summary_stats(pa_data %>% filter(SEX==2),var)
+        sex="Men",
+        summary_stats(pa_data %>% filter(SEX==1),var)
     ),
     cbind(
         summary=desc, 
-        sex="Men",
-        summary_stats(pa_data %>% filter(SEX==1),var)
+        sex="Women",
+        summary_stats(pa_data %>% filter(SEX==2),var)
     ),
     cbind(
         summary=desc, 
@@ -363,13 +363,13 @@ var <- 'mmet_hrs_wk_total'
 mmets_summaries[['total']]  <- rbind(
     cbind(
         summary=desc, 
-        sex="Women",
-        summary_stats(pa_data %>% filter(SEX==2),var)
+        sex="Men",
+        summary_stats(pa_data %>% filter(SEX==1),var)
     ),
     cbind(
         summary=desc, 
-        sex="Men",
-        summary_stats(pa_data %>% filter(SEX==1),var)
+        sex="Women",
+        summary_stats(pa_data %>% filter(SEX==2),var)
     ),
     cbind(
         summary=desc, 
@@ -408,8 +408,9 @@ meta_analysis_results <- data.frame(
 )
 
 mmets_comparison <- rbind(
-        rbindlist(mmets_summaries),
-        meta_analysis_results
+        meta_analysis_results,
+        mmets_summaries[['total']],
+        mmets_summaries[['recreation']]
     )
 options(knitr.kable.NA = '-')
 knitr::kable(
@@ -758,11 +759,8 @@ table(prediction$zeroPrediction)
 #| output: true
 nonzeroPP <- prediction %>% filter(!zeroPrediction)
 
-# the non-zero mMET hours/week negative binomial regression output is on a log scale 
-# and must be exponentiated for the correct units
 nonzeroPP_predict <- nonzeroPP %>% mutate(
-    predicted_log_mmet_hrs_wk_recreation = predict(m.mMETs_recreational$neg_binom_over0, nonzeroPP),
-    mMETs_recreational = exp(predicted_log_mmet_hrs_wk_recreation)
+    mMETs_recreational = predict(m.mMETs_recreational$linear, nonzeroPP)
 )
 
 pp <- pp %>% 
@@ -806,13 +804,13 @@ mmets_comparison <- rbind(
     mmets_comparison,
     cbind(
         summary=desc, 
-        sex="Women",
-        summary_stats(pp %>% filter(Gender=='Female'),var)
+        sex="Men",
+        summary_stats(pp %>% filter(Gender=='Male'),var)
     ),
     cbind(
         summary=desc, 
-        sex="Men",
-        summary_stats(pp %>% filter(Gender=='Male'),var)
+        sex="Women",
+        summary_stats(pp %>% filter(Gender=='Female'),var)
     ),
     cbind(
         summary=desc, 
@@ -829,3 +827,9 @@ knitr::kable(
 )
 
 ```
+
+Comparing the meta-analysis estimates for gender-stratified physical activity mMET hours/week to those in the Australian NHS data, the latter has broadly similar if slightly lower estimates overall; approximately 4 mMET-hours/week lower (albeit, with substantial variation).  Conversely, the maximum recorded mMET/hours were higher in the NHS data than in the meta-analysis.  While gender-specific trends were broadly similar (women on average recording lower mMET hours/week in both the meta-analysis and NHS total and recreation estimates), the maximum mMET hours/week for women was higher for women in the Australian NHS sample.  It is worth noting the limitation of the Australian NHS data that it is national and not restricted to an urban population; this could be an important difference, if cohort studies tend to have an urban focus. 
+
+The modelled estimates for recreational mMET hours/week were similar on average to the NHS data from which they were based (similar means by sex and overall).  As the estimates were based on modelled averages, the reduced variability by sex and overall is not surprising.  The median (and 75th percentile, to a lesser degree) of the synthetic population estimates were substantially higher than the NHS data they were modelled from.  This may relate to demographic differences with the synthetic population reflecting demographics of an urban population in Melbourne, compared with the NHS data's national population.  Likely it also reflects aspects of the modelling approach: the hurdle design's binomial model appears to effectively model the propensity to undertake any recreational physical activity (i.e. the zeros) but the modelling of mMET hours/week may otherwise approximate a normal distribution.  This was the case regardless of using a linear model (as currently used, for comparability with the Manchester approach) or a negative binomial model (which resulted in similar if slightly reduced estimates, approximately 1 mMET hour/week lower).  Given the similarity, the simpler model may be perferable.  
+
+The resulting synthetic population estimates for mMET hours/week arguably make sense as these are estimates based on average effects given demographic covariates, not true results for individuals.  They are by definition, according to the methods used, normative. Therefore it is not suprising the long tail of maximum mMET hours in the meta-analysis and NHS survey data is truncated to approximately 20 mMET hours/week.  Despite not representing the full and skewed distribution of mMET hours/week that would be expected in the population, if the purpose of the synthetic population is for inference on average effects for the basic range of included covariates, these estimates should be adequate for usage as exposures in the health modelling.
