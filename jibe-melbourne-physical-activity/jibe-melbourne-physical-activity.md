@@ -46,9 +46,11 @@ Load libaries
 
 ``` r
 library(dplyr)
-library(vtable)
+library(vtable) # descrtiptive statistic model.tables
+library(jtools) # clean model summaries
 library(ggplot2)
 library(data.table)
+library(MASS) # for glm negative binomial model
 ```
 
 ## Data
@@ -138,18 +140,13 @@ data <- list(
 
 ``` r
 nhs <- dplyr::left_join(
-            data$households %>% 
-                select(
-                    c( 
+            data$households[c( 
                         "ABSHIDB",
                         "STATE16", 
                         "NUMPERBC",
                         "SA1SF2DN"
-                    )
-                ),
-            data$persons %>% 
-                select(
-                    c(
+                    )],
+            data$persons[c(
                         "ABSHIDB",
                         "ABSPID",
                         "AGEB",
@@ -163,7 +160,7 @@ nhs <- dplyr::left_join(
                         "EXLWMMIN",
                         "EXLWVMIN"
                     )
-                ) %>% rename(
+                ] %>% rename(
                     walk_recreation_min=EXFSRMIN,
                     walk_transport_min=EXTRAMIN,
                     mod_excercise_min=EXLWMMIN,
@@ -208,12 +205,15 @@ I am using
 [data.table](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html)
 as it is meant to be optimised for handling large datasets, like this
 synthetic population. This performs subsequent operations deriving new
-variables much faster.
+variables much faster. To ensure the source data that we’ll later attach
+modelled results to remains otherwise unmodified, I’ll also create a
+copy ‘pp’. The name ‘pp’ is used to refer to the synthetic population in
+related modelling work undertaken for Manchester.
 
 ``` r
 population_final.rds <- file.choose()
-pp <- readRDS(population_final.rds) %>% as.data.table()
-pp %>% st(out='kable')
+synpop <- readRDS(population_final.rds) %>% as.data.table()
+synpop %>% st(out='kable')
 ```
 
 | Variable | N | Mean | Std. Dev. | Min | Pctl. 25 | Pctl. 75 | Max |
@@ -252,6 +252,10 @@ pp %>% st(out='kable')
 | hhCar | 4174097 | 1.8 | 1 | 0 | 1 | 2 | 4 |
 
 Summary Statistics
+
+``` r
+pp <- data.table(synpop)
+```
 
 Considering the above, I think the following points are worth
 considering as model refinements:
@@ -320,7 +324,10 @@ Marginal metabolic equivalent hours per week (mMET hours/week; `mmet`)
 are calculated as the sum of hours spent walking for recreation, doing
 moderate exercise and doing vigorous exercise, with each respectively
 multiplied by the metabolic equivalent of these tasks (METs) minus one
-(already in MMETs in code).
+(already in MMETs in code). These have been rounded to integers to
+support consideration of negative binomial models, that may make sense
+for this type of positive skewed zero-inflated data (a possible
+alternative to a linear hurdle model).
 
 When deriving factor variables I have set ordered to False, as the
 alternative setting needlessly over-complicates the modelling
@@ -364,65 +371,75 @@ pa_data <- nhs  %>%
             SA1SF2DN %in% c(5, 6) ~ 3,
             SA1SF2DN %in% c(7, 8) ~ 4,
             SA1SF2DN %in% c(9, 10) ~ 5
+        ),
+        irsd_sa1_quintile_cat = factor(
+            irsd_sa1, 
+            levels = 1:5, 
+            labels = c("1 (most deprived)", "2", "3 (reference)", "4", "5 (least deprived)")
         )
     ) %>% 
-  mutate(
-    age_years = case_when(
-        AGEB == 5 ~ 18,
-        AGEB == 6 ~ 20,
-        AGEB == 7 ~ 25,
-        AGEB == 8 ~ 30,
-        AGEB == 9 ~ 35,
-        AGEB == 10 ~ 40,
-        AGEB == 11 ~ 45,
-        AGEB == 12 ~ 50,
-        AGEB == 13 ~ 55,
-        AGEB == 14 ~ 60,
-        AGEB == 15 ~ 65,
-        AGEB == 16 ~ 70,
-        AGEB == 17 ~ 75,
-        AGEB == 18 ~ 80,
-        AGEB == 19 ~ 85,
-        TRUE ~ NA_real_  # Handle unexpected values
-    ),
-        AGEB = factor(
-            AGEB, 
-            levels = 5:19, 
-            labels = c("18-19","20-24", "25-29", "30-34", "35-39", 
-                        "40-44", "45-49", "50-54", "55-59", 
-                        "60-64", "65-69", "70-74", "75-79", 
-                        "80-84", "≥85"),
-            ordered = FALSE
+    mutate(
+        irsd_sa1_quintile_cat = relevel(irsd_sa1_quintile_cat, ref = "3 (reference)")
+    ) %>%
+    mutate(
+        age_years = case_when(
+            AGEB == 5 ~ 18,
+            AGEB == 6 ~ 20,
+            AGEB == 7 ~ 25,
+            AGEB == 8 ~ 30,
+            AGEB == 9 ~ 35,
+            AGEB == 10 ~ 40,
+            AGEB == 11 ~ 45,
+            AGEB == 12 ~ 50,
+            AGEB == 13 ~ 55,
+            AGEB == 14 ~ 60,
+            AGEB == 15 ~ 65,
+            AGEB == 16 ~ 70,
+            AGEB == 17 ~ 75,
+            AGEB == 18 ~ 80,
+            AGEB == 19 ~ 85,
+            TRUE ~ NA_real_  # Handle unexpected values
         ),
-    female=ifelse(SEX==2,1,0),
-    is_employed=case_when(
-            LFSBC==1 ~ 1,
-            LFSBC %in% c(0,2,3) ~ 0
-        ),
-    is_student=ifelse(STDYFTPT %in% c(1,2),1,0),
-    education = case_when(
-        HIGHLVBC %in% c(1,2) ~ 2,
-        HIGHLVBC %in% c(3,7) ~ 1,
-        HIGHLVBC %in% c(8,12) ~ 0,
-        TRUE ~ NA_real_  # Handle unexpected values
-        ),
-    education = factor(
-        education,
-        levels=0:2,
-        labels=c('low','medium','high'),
-        ordered=FALSE
-    )
+            AGEB = factor(
+                AGEB, 
+                levels = 5:19, 
+                labels = c("18-19","20-24", "25-29", "30-34", "35-39", 
+                            "40-44", "45-49", "50-54", "55-59", 
+                            "60-64", "65-69", "70-74", "75-79", 
+                            "80-84", "≥85"),
+                ordered = FALSE
+            ),
+        female=ifelse(SEX==2,1,0),
+        is_employed=case_when(
+                LFSBC==1 ~ 1,
+                LFSBC %in% c(0,2,3) ~ 0
+            ),
+        is_student=ifelse(STDYFTPT %in% c(1,2),1,0),
+        education = case_when(
+            HIGHLVBC %in% c(1,2) ~ 2,
+            HIGHLVBC %in% c(3,7) ~ 1,
+            HIGHLVBC %in% c(8,12) ~ 0,
+            TRUE ~ NA_real_  # Handle unexpected values
+            ),
+        education = factor(
+            education,
+            levels=0:2,
+            labels=c('low','medium','high'),
+            ordered=FALSE
+        )
     )  %>%
     mutate(
-        mmet_hrs_wk_recreation =
+        mmet_hrs_wk_recreation = round(
             walk_recreation_min/60* MMET_WALKING + 
             mod_excercise_min/60 * MMET_MOD + 
-            vig_excercise_min/60 * MMET_VIG, 
-        mmet_hrs_wk_total = 
+            vig_excercise_min/60 * MMET_VIG
+            ), 
+        mmet_hrs_wk_total = round(
             walk_transport_min/60 * MMET_WALKING + 
             walk_recreation_min/60* MMET_WALKING +
             mod_excercise_min/60 * MMET_MOD + 
-            vig_excercise_min/60 * MMET_VIG,
+            vig_excercise_min/60 * MMET_VIG
+        ),
         mmet_hrs_wk_recreation_zero = ifelse(mmet_hrs_wk_recreation == 0, 1, 0)
     ) 
 
@@ -461,6 +478,12 @@ pa_data %>% st(out='kable')
 | mod_excercise_min           | 16367 | 47    | 112       | 0   | 0        | 40       | 840 |
 | vig_excercise_min           | 16370 | 31    | 88        | 0   | 0        | 0        | 840 |
 | irsd_sa1                    | 16376 | 3     | 1.4       | 1   | 2        | 4        | 5   |
+| irsd_sa1_quintile_cat       | 16376 |       |           |     |          |          |     |
+| … 3 (reference)             | 3489  | 21%   |           |     |          |          |     |
+| … 1 (most deprived)         | 3177  | 19%   |           |     |          |          |     |
+| … 2                         | 3419  | 21%   |           |     |          |          |     |
+| … 4                         | 3305  | 20%   |           |     |          |          |     |
+| … 5 (least deprived)        | 2986  | 18%   |           |     |          |          |     |
 | age_years                   | 16370 | 49    | 18        | 18  | 35       | 65       | 85  |
 | female                      | 16370 | 0.54  | 0.5       | 0   | 0        | 1        | 1   |
 | is_employed                 | 16370 | 0.61  | 0.49      | 0   | 0        | 1        | 1   |
@@ -470,8 +493,8 @@ pa_data %>% st(out='kable')
 | … medium                    | 3518  | 43%   |           |     |          |          |     |
 | … high                      | 4520  | 55%   |           |     |          |          |     |
 | mmet_hrs_wk_recreation      | 16359 | 10    | 15        | 0   | 0        | 14       | 182 |
-| mmet_hrs_wk_total           | 16318 | 13    | 17        | 0   | 1.2      | 18       | 207 |
-| mmet_hrs_wk_recreation_zero | 16359 | 0.36  | 0.48      | 0   | 0        | 1        | 1   |
+| mmet_hrs_wk_total           | 16318 | 13    | 17        | 0   | 1        | 18       | 207 |
+| mmet_hrs_wk_recreation_zero | 16359 | 0.37  | 0.48      | 0   | 0        | 1        | 1   |
 
 Summary Statistics
 
@@ -499,6 +522,31 @@ summary_stats <- function(
             max = max(get(variable), na.rm = TRUE)
         ) 
     return (summary.table)
+}
+
+
+summary_stats_by <- function(
+    data,
+    variable,
+    by
+) {
+    library(dplyr)
+    grouped_data <- data %>% group_by(get(by))
+    summary_table <- grouped_data %>% 
+        summarise(
+            n = n(),
+            count = sum(!is.na(get(variable))),
+            mean = mean(get(variable), na.rm = TRUE),
+            sd = sd(get(variable), na.rm = TRUE),
+            min = min(get(variable), na.rm = TRUE),
+            p25 = quantile(get(variable), 0.25, na.rm = TRUE),
+            p50 = median(get(variable), na.rm = TRUE),
+            p75 = quantile(get(variable), 0.75, na.rm = TRUE),
+            max = max(get(variable), na.rm = TRUE)
+        )%>% 
+        rename(!!by := 'get(by)')
+    
+    return(summary_table)
 }
 
 mmets_summaries <- list()
@@ -598,44 +646,19 @@ knitr::kable(
 )
 ```
 
-| summary               | sex     | count |   mean |     sd | min |  p25 |    p50 |    p75 |    max |
-|:----------------------|:--------|------:|-------:|-------:|----:|-----:|-------:|-------:|-------:|
-| meta-analysis (total) | Men     |    \- | 18.698 |     \- |   0 | 2.73 | 10.660 | 23.870 | 156.45 |
-| meta-analysis (total) | Women   |    \- | 17.352 |     \- |   0 | 2.61 | 10.660 | 22.820 | 103.60 |
-| meta-analysis (total) | Overall |    \- | 16.908 |     \- |   0 | 2.35 | 10.500 | 22.500 | 130.02 |
-| NHS (total)           | Men     |  7552 | 14.476 | 18.868 |   0 | 1.25 |  7.500 | 21.000 | 153.00 |
-| NHS (total)           | Women   |  8766 | 11.574 | 15.331 |   0 | 1.25 |  6.250 | 16.083 | 207.00 |
-| NHS (total)           | Overall | 16318 | 12.917 | 17.120 |   0 | 1.25 |  6.667 | 17.500 | 207.00 |
-| NHS (recreation)      | Men     |  7575 | 11.473 | 17.196 |   0 | 0.00 |  4.000 | 16.500 | 147.00 |
-| NHS (recreation)      | Women   |  8784 |  8.815 | 13.720 |   0 | 0.00 |  3.604 | 12.250 | 182.00 |
-| NHS (recreation)      | Overall | 16359 | 10.046 | 15.484 |   0 | 0.00 |  3.750 | 14.000 | 182.00 |
+| summary               | sex     | count |   mean |     sd | min |  p25 |   p50 |   p75 |    max |
+|:----------------------|:--------|------:|-------:|-------:|----:|-----:|------:|------:|-------:|
+| meta-analysis (total) | Men     |    \- | 18.698 |     \- |   0 | 2.73 | 10.66 | 23.87 | 156.45 |
+| meta-analysis (total) | Women   |    \- | 17.352 |     \- |   0 | 2.61 | 10.66 | 22.82 | 103.60 |
+| meta-analysis (total) | Overall |    \- | 16.908 |     \- |   0 | 2.35 | 10.50 | 22.50 | 130.02 |
+| NHS (total)           | Men     |  7552 | 14.464 | 18.876 |   0 | 1.00 |  8.00 | 21.00 | 153.00 |
+| NHS (total)           | Women   |  8766 | 11.568 | 15.343 |   0 | 1.00 |  6.00 | 16.00 | 207.00 |
+| NHS (total)           | Overall | 16318 | 12.909 | 17.130 |   0 | 1.00 |  7.00 | 18.00 | 207.00 |
+| NHS (recreation)      | Men     |  7575 | 11.473 | 17.201 |   0 | 0.00 |  4.00 | 16.00 | 147.00 |
+| NHS (recreation)      | Women   |  8784 |  8.816 | 13.725 |   0 | 0.00 |  4.00 | 12.00 | 182.00 |
+| NHS (recreation)      | Overall | 16359 | 10.046 | 15.488 |   0 | 0.00 |  4.00 | 14.00 | 182.00 |
 
 Marginal MET hours per week
-
-#### Age
-
-mMET hours per week by age backet – there may be some non-linearity
-(e.g. 18-19 year olds median METS are lower, but perhaps not
-meaningfully so), but broadly, younger people have higher mMETs:
-
-``` r
-ggplot(pa_data,aes(x=AGEB, y=mmet_hrs_wk_recreation)) + geom_boxplot() + coord_flip()
-```
-
-![](jibe-melbourne-physical-activity_files/figure-commonmark/visualise-age-distribution-1.png)
-
-``` r
-qplot(x=pa_data$age_years,y=pa_data$mmet_hrs_wk_recreation, geom='smooth', span =0.5)
-```
-
-![](jibe-melbourne-physical-activity_files/figure-commonmark/visualise-age-distribution-2.png)
-
-Looking at the qplot, to me it seems reasonable on grounds of parsimony
-to model the relationship between age and mMET hours/week as a linear
-function. There is a drop off after 70, however our data is relatively
-sparse beyond there and our last category does capture persons older
-than 85. Its easier to interpret the story from the qplot than boxplots
-too.
 
 #### Correlations
 
@@ -679,12 +702,17 @@ correlation_matrix[order(correlation_matrix$mmet_hrs_wk_recreation),] %>% round(
 ```
 
 None of the variables in themselves are strongly associated with mMET
-hours/week. As indicated above, age in years has a negative association.
-Being female is similarly associated with lower mMET hours/week. Number
-of persons in household and being a student were not associated with
-mMETs and need not be included in the model. Employment, lower
-socio-economic deprivation, and higher degree of education had weak
-positive associations with mMET hours/week.
+hours/week. Age is associated with lower mMET hours/week, as is being
+female (negative correlations). Associations with age may be slightly
+non-linear; a sensitivity analysis further below suggests that although
+mMET hours/week peaked in the 20-24 years age group not the youngest
+(18-19 years; n=33, the smallest sample and may not be representative),
+the trend is broadly monotonic and arguably approximately linear albeit
+with increasing rate of decline after age 70. Number of persons in
+household and being a student were not associated with mMETs and need
+not be included in the model. Employment, lower socio-economic
+deprivation, and higher degree of education had weak positive
+associations with mMET hours/week.
 
 #### Clustering
 
@@ -711,9 +739,9 @@ pa_data %>%
 Select relevant variables and only retain records with full data.
 
 ``` r
-pa_data =pa_data%>%
-  select(ABSPID, age_years, female, is_employed, education, irsd_sa1, mmet_hrs_wk_recreation, mmet_hrs_wk_recreation_zero)%>%
-  na.omit()
+pa_data =pa_data[
+    c('ABSPID', 'AGEB', 'age_years', 'female', 'is_employed', 'education', 'irsd_sa1','irsd_sa1_quintile_cat','mmet_hrs_wk_recreation', 'mmet_hrs_wk_recreation_zero')
+    ] %>% na.omit()
 
 pa_data %>% st(out='kable')
 ```
@@ -721,6 +749,22 @@ pa_data %>% st(out='kable')
 | Variable                    | N    | Mean | Std. Dev. | Min | Pctl. 25 | Pctl. 75 | Max |
 |:----------------------------|:-----|:-----|:----------|:----|:---------|:---------|:----|
 | ABSPID                      | 8158 | 1    | 0         | 1   | 1        | 1        | 1   |
+| AGEB                        | 8158 |      |           |     |          |          |     |
+| … 18-19                     | 33   | 0%   |           |     |          |          |     |
+| … 20-24                     | 254  | 3%   |           |     |          |          |     |
+| … 25-29                     | 607  | 7%   |           |     |          |          |     |
+| … 30-34                     | 828  | 10%  |           |     |          |          |     |
+| … 35-39                     | 856  | 10%  |           |     |          |          |     |
+| … 40-44                     | 794  | 10%  |           |     |          |          |     |
+| … 45-49                     | 807  | 10%  |           |     |          |          |     |
+| … 50-54                     | 701  | 9%   |           |     |          |          |     |
+| … 55-59                     | 725  | 9%   |           |     |          |          |     |
+| … 60-64                     | 718  | 9%   |           |     |          |          |     |
+| … 65-69                     | 613  | 8%   |           |     |          |          |     |
+| … 70-74                     | 551  | 7%   |           |     |          |          |     |
+| … 75-79                     | 316  | 4%   |           |     |          |          |     |
+| … 80-84                     | 211  | 3%   |           |     |          |          |     |
+| … ≥85                       | 144  | 2%   |           |     |          |          |     |
 | age_years                   | 8158 | 48   | 17        | 18  | 35       | 60       | 85  |
 | female                      | 8158 | 0.59 | 0.49      | 0   | 0        | 1        | 1   |
 | is_employed                 | 8158 | 0.66 | 0.47      | 0   | 0        | 1        | 1   |
@@ -729,32 +773,221 @@ pa_data %>% st(out='kable')
 | … medium                    | 3515 | 43%  |           |     |          |          |     |
 | … high                      | 4516 | 55%  |           |     |          |          |     |
 | irsd_sa1                    | 8158 | 3.2  | 1.4       | 1   | 2        | 4        | 5   |
+| irsd_sa1_quintile_cat       | 8158 |      |           |     |          |          |     |
+| … 3 (reference)             | 1737 | 21%  |           |     |          |          |     |
+| … 1 (most deprived)         | 1220 | 15%  |           |     |          |          |     |
+| … 2                         | 1548 | 19%  |           |     |          |          |     |
+| … 4                         | 1772 | 22%  |           |     |          |          |     |
+| … 5 (least deprived)        | 1881 | 23%  |           |     |          |          |     |
 | mmet_hrs_wk_recreation      | 8158 | 11   | 16        | 0   | 0        | 16       | 147 |
-| mmet_hrs_wk_recreation_zero | 8158 | 0.3  | 0.46      | 0   | 0        | 1        | 1   |
+| mmet_hrs_wk_recreation_zero | 8158 | 0.31 | 0.46      | 0   | 0        | 1        | 1   |
 
 Summary Statistics
 
-Copy a subset of data for persons who record at least some mMET
-hours/week
+Now the full analytical sample has been determined, its worth noting the
+sample sizes for the default reference categories of the factor
+variables summarised above. For age, the first category (default
+reference) is ages 18-19, for which there are only 33 individuals; this
+is further reduced to 19 after those with zero recorded recreational
+physical activity are excluded (below). Comparisons with this category
+against all others will result in poor estimates lacking precision due
+to the small referrent group sample size (see Lash, Timothy L. et al.,
+eds. Modern Epidemiology. 4th ed. Phil: Wolters Kluwer / Lippincott
+Williams & Wilkins, 2021.
+[p719](https://ebookcentral.proquest.com/lib/rmit/reader.action?docID=6947080&ppg=719)).
+A better reference choice, if including age as categorical instead of
+continuous, would be persons aged 35-39 (n=856, or n=627 undertaking any
+recreational physical activity).
+
+A similar issue is observed with education where ‘low’ only contains
+n=59 individuals, compared to 2103 (medium) and 3513 (high). While the
+high category has the largest sample count in the NHS reference data,
+‘medium’ is the most meaningful normative reference point and also the
+most common category in the synthetic population; so the reference for
+education should be set to ‘medium’.
+
+The middle quintile ‘3’ was already set as a reference category in the
+data set up stage, as the normative group.
+
+``` r
+pa_data$AGEB <- relevel(pa_data$AGEB, ref = "35-39")
+pa_data$education <- relevel(pa_data$education, ref = "medium")
+```
+
+With intentional factor variable reference levels established, a subset
+of data for persons who record at least some mMET hours/week will be
+copied to a new dataframe.
 
 ``` r
 pa_data_over0=pa_data[pa_data$mmet_hrs_wk_recreation>0,]
 pa_data_over0 %>% st(out='kable')
 ```
 
-| Variable                    | N    | Mean | Std. Dev. | Min   | Pctl. 25 | Pctl. 75 | Max |
-|:----------------------------|:-----|:-----|:----------|:------|:---------|:---------|:----|
-| ABSPID                      | 5675 | 1    | 0         | 1     | 1        | 1        | 1   |
-| age_years                   | 5675 | 47   | 16        | 18    | 35       | 60       | 85  |
-| female                      | 5675 | 0.58 | 0.49      | 0     | 0        | 1        | 1   |
-| is_employed                 | 5675 | 0.69 | 0.46      | 0     | 0        | 1        | 1   |
-| education                   | 5675 |      |           |       |          |          |     |
-| … low                       | 59   | 1%   |           |       |          |          |     |
-| … medium                    | 2103 | 37%  |           |       |          |          |     |
-| … high                      | 3513 | 62%  |           |       |          |          |     |
-| irsd_sa1                    | 5675 | 3.3  | 1.4       | 1     | 2        | 5        | 5   |
-| mmet_hrs_wk_recreation      | 5675 | 16   | 17        | 0.058 | 5        | 22       | 147 |
-| mmet_hrs_wk_recreation_zero | 5675 | 0    | 0         | 0     | 0        | 0        | 0   |
+| Variable                    | N    | Mean | Std. Dev. | Min | Pctl. 25 | Pctl. 75 | Max |
+|:----------------------------|:-----|:-----|:----------|:----|:---------|:---------|:----|
+| ABSPID                      | 5645 | 1    | 0         | 1   | 1        | 1        | 1   |
+| AGEB                        | 5645 |      |           |     |          |          |     |
+| … 35-39                     | 625  | 11%  |           |     |          |          |     |
+| … 18-19                     | 19   | 0%   |           |     |          |          |     |
+| … 20-24                     | 190  | 3%   |           |     |          |          |     |
+| … 25-29                     | 463  | 8%   |           |     |          |          |     |
+| … 30-34                     | 609  | 11%  |           |     |          |          |     |
+| … 40-44                     | 566  | 10%  |           |     |          |          |     |
+| … 45-49                     | 589  | 10%  |           |     |          |          |     |
+| … 50-54                     | 480  | 9%   |           |     |          |          |     |
+| … 55-59                     | 487  | 9%   |           |     |          |          |     |
+| … 60-64                     | 489  | 9%   |           |     |          |          |     |
+| … 65-69                     | 435  | 8%   |           |     |          |          |     |
+| … 70-74                     | 349  | 6%   |           |     |          |          |     |
+| … 75-79                     | 191  | 3%   |           |     |          |          |     |
+| … 80-84                     | 97   | 2%   |           |     |          |          |     |
+| … ≥85                       | 56   | 1%   |           |     |          |          |     |
+| age_years                   | 5645 | 47   | 16        | 18  | 35       | 60       | 85  |
+| female                      | 5645 | 0.58 | 0.49      | 0   | 0        | 1        | 1   |
+| is_employed                 | 5645 | 0.69 | 0.46      | 0   | 0        | 1        | 1   |
+| education                   | 5645 |      |           |     |          |          |     |
+| … medium                    | 2092 | 37%  |           |     |          |          |     |
+| … low                       | 59   | 1%   |           |     |          |          |     |
+| … high                      | 3494 | 62%  |           |     |          |          |     |
+| irsd_sa1                    | 5645 | 3.3  | 1.4       | 1   | 2        | 5        | 5   |
+| irsd_sa1_quintile_cat       | 5645 |      |           |     |          |          |     |
+| … 3 (reference)             | 1178 | 21%  |           |     |          |          |     |
+| … 1 (most deprived)         | 686  | 12%  |           |     |          |          |     |
+| … 2                         | 982  | 17%  |           |     |          |          |     |
+| … 4                         | 1314 | 23%  |           |     |          |          |     |
+| … 5 (least deprived)        | 1485 | 26%  |           |     |          |          |     |
+| mmet_hrs_wk_recreation      | 5645 | 16   | 17        | 1   | 5        | 22       | 147 |
+| mmet_hrs_wk_recreation_zero | 5645 | 0    | 0         | 0   | 0        | 0        | 0   |
+
+Summary Statistics
+
+#### Synthetic population data set up
+
+The NHS survey provides age in brackets, while the synthetic population
+has continuous age as well as an age category variable. The grouping of
+the latter are not explicitly named however, and if we were to use age
+groups it may be best to create a new group to specifically match the
+NHS brackets used in modelling.
+
+Let’s have a look at the age brackets in the synthetic population first:
+
+``` r
+summary_stats_by(pp,'Age','age_cat') %>% print(n=Inf)
+## # A tibble: 21 × 10
+##    age_cat      n  count   mean    sd   min   p25   p50   p75   max
+##      <dbl>  <int>  <int>  <dbl> <dbl> <int> <dbl> <dbl> <dbl> <int>
+##  1       1 284254 284254   2.03  1.41    -1     1     2     3     4
+##  2       2 284561 284561   7.00  1.41     5     6     7     8     9
+##  3       3 263525 263525  12.0   1.42    10    11    12    13    14
+##  4       4 249681 249681  17.1   1.42    15    16    17    18    19
+##  5       5 313927 313927  22.1   1.41    20    21    22    23    24
+##  6       6 327370 327370  27.0   1.41    25    26    27    28    29
+##  7       7 333619 333619  32.0   1.41    30    31    32    33    34
+##  8       8 296799 296799  36.9   1.42    35    36    37    38    39
+##  9       9 292171 292171  42.0   1.42    40    41    42    43    44
+## 10      10 286509 286509  46.9   1.41    45    46    47    48    49
+## 11      11 260520 260520  52.0   1.41    50    51    52    53    54
+## 12      12 271781 271781  56.9   1.42    55    56    57    58    59
+## 13      13 188611 188611  61.8   1.45    60    60    62    63    64
+## 14      14 157211 157211  67.0   1.43    65    66    67    68    69
+## 15      15 148115 148115  71.9   1.41    70    71    72    73    74
+## 16      16  90766  90766  76.8   1.44    75    75    77    78    79
+## 17      17  62918  62918  81.9   1.41    80    81    82    83    84
+## 18      18  42481  42481  86.5   1.43    85    85    86    88    89
+## 19      19  15741  15741  91.5   1.36    90    90    91    93    94
+## 20      20   3511   3511  96.2   1.25    95    95    96    97    99
+## 21      21     26     26 101.    1.37   100   100   101   101   104
+```
+
+The age brackets don’t match the NHS variable; as expected, we’ll have
+to create a new age bracket variable.
+
+``` r
+age_breaks <- c(18, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, Inf)
+age_labels <- c("18-19", "20-24", "25-29", "30-34", "35-39", 
+                "40-44", "45-49", "50-54", "55-59", 
+                "60-64", "65-69", "70-74", "75-79", 
+                "80-84", "≥85")
+pp$AGEB <- cut(pp$Age, breaks = age_breaks, labels = age_labels, right = FALSE)
+pp$AGEB <- relevel(pp$AGEB, ref = "35-39")
+summary_stats_by(pp,'Age','AGEB') %>% print(n=Inf)
+```
+
+Great, so now there’s an age bracket variable in the synthetic
+population that matches the NHS data breaks.
+
+We also want to set the reference levels for other variables to match
+those in the NHS drawn physical activity data.
+
+``` r
+pp$education <- factor(pp$education)
+pp$education <- relevel(pp$education, ref = "medium")
+```
+
+There are some remaining variables to derive in order to get our
+synthetic population data into the equivalent format to our model,
+e.g. by converting string categorical variables to binary indicators and
+adapting the SEIFA IRSD to quintiles. Then we can use our predictions
+and apply them to the synthetic population.
+
+``` r
+# Perform the transformations
+pp[, `:=`(
+    irsd_sa1 = fifelse(IRSAD %in% c(1, 2), 1,
+                fifelse(IRSAD %in% c(3, 4), 2,
+                fifelse(IRSAD %in% c(5, 6), 3,
+                fifelse(IRSAD %in% c(7, 8), 4,
+                fifelse(IRSAD %in% c(9, 10), 5, NA_real_))))),
+    age_years = Age,
+    female = fifelse(Gender == "Female", 1, 0),
+    is_employed = fifelse(is_employed == "Yes", 1, 0)
+)]
+
+pp$irsd_sa1_quintile_cat = factor(
+        pp$irsd_sa1, 
+        levels = 1:5, 
+        labels = c("1 (most deprived)", "2", "3 (reference)", "4", "5 (least deprived)")
+    )
+pp$irsd_sa1_quintile_cat = relevel(pp$irsd_sa1_quintile_cat, ref = "3 (reference)")
+
+# Select the relevant columns
+data <- pp[Age >= 18, .(AgentId, age_years, AGEB, female, is_employed, education, irsd_sa1, irsd_sa1_quintile_cat)] 
+data %>% st(out='kable')
+```
+
+| Variable              | N       | Mean    | Std. Dev. | Min | Pctl. 25 | Pctl. 75 | Max     |
+|:----------------------|:--------|:--------|:----------|:----|:---------|:---------|:--------|
+| AgentId               | 3199371 | 2084203 | 1204886   | 1   | 1041335  | 3133223  | 4174097 |
+| age_years             | 3199371 | 45      | 18        | 18  | 30       | 58       | 104     |
+| AGEB                  | 3199371 |         |           |     |          |          |         |
+| … 35-39               | 296799  | 9%      |           |     |          |          |         |
+| … 18-19               | 107295  | 3%      |           |     |          |          |         |
+| … 20-24               | 313927  | 10%     |           |     |          |          |         |
+| … 25-29               | 327370  | 10%     |           |     |          |          |         |
+| … 30-34               | 333619  | 10%     |           |     |          |          |         |
+| … 40-44               | 292171  | 9%      |           |     |          |          |         |
+| … 45-49               | 286509  | 9%      |           |     |          |          |         |
+| … 50-54               | 260520  | 8%      |           |     |          |          |         |
+| … 55-59               | 271781  | 8%      |           |     |          |          |         |
+| … 60-64               | 188611  | 6%      |           |     |          |          |         |
+| … 65-69               | 157211  | 5%      |           |     |          |          |         |
+| … 70-74               | 148115  | 5%      |           |     |          |          |         |
+| … 75-79               | 90766   | 3%      |           |     |          |          |         |
+| … 80-84               | 62918   | 2%      |           |     |          |          |         |
+| … ≥85                 | 61759   | 2%      |           |     |          |          |         |
+| female                | 3199371 | 0.52    | 0.5       | 0   | 0        | 1        | 1       |
+| is_employed           | 3199371 | 0       | 0         | 0   | 0        | 0        | 0       |
+| education             | 3199371 |         |           |     |          |          |         |
+| … medium              | 1880352 | 59%     |           |     |          |          |         |
+| … high                | 1035911 | 32%     |           |     |          |          |         |
+| … low                 | 283108  | 9%      |           |     |          |          |         |
+| irsd_sa1              | 3193813 | 3.4     | 1.3       | 1   | 2        | 5        | 5       |
+| irsd_sa1_quintile_cat | 3193813 |         |           |     |          |          |         |
+| … 3 (reference)       | 642405  | 20%     |           |     |          |          |         |
+| … 1 (most deprived)   | 406176  | 13%     |           |     |          |          |         |
+| … 2                   | 491099  | 15%     |           |     |          |          |         |
+| … 4                   | 845299  | 26%     |           |     |          |          |         |
+| … 5 (least deprived)  | 808834  | 25%     |           |     |          |          |         |
 
 Summary Statistics
 
@@ -765,232 +998,235 @@ the Manchester physical activity modelling R code file
 `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi
 and Marina Berdokhova.
 
-#### Modelling mMETS hours/week
+Age as categorical does not display any clear trend, whereas there is a
+strong association for age when modelled as a continuous variable.
+Because the purpose of this model is prediction and not inference, the
+use of age brackets may be justified to account for the slight
+non-linearity observed when making predictions for the synthetic
+population. This implications of this decision will be explored further
+in subsequent sensitivity analysis.
+
+A negative binomial model was used to model the recreational physical
+activity data for those who recorded mMET hours/week as it was found to
+provide a better prediction for the skewed data than a linear model.
+Modelling options supporting this decision are explored in a sensitivity
+analysis further below.
 
 ``` r
+# initialise model list
 m.mMETs_recreational <- list()
-
-m.mMETs_recreational$linear <- lm(
-    mmet_hrs_wk_recreation ~ female+age_years+is_employed+education+irsd_sa1,
-    data = pa_data_over0)
-summary(m.mMETs_recreational$linear)
-## 
-## Call:
-## lm(formula = mmet_hrs_wk_recreation ~ female + age_years + is_employed + 
-##     education + irsd_sa1, data = pa_data_over0)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -20.874 -11.131  -5.343   5.700 129.395 
-## 
-## Coefficients:
-##                 Estimate Std. Error t value Pr(>|t|)    
-## (Intercept)     15.32732    2.50272   6.124 9.72e-10 ***
-## female          -4.38253    0.45627  -9.605  < 2e-16 ***
-## age_years       -0.04418    0.01648  -2.681  0.00736 ** 
-## is_employed      1.22782    0.57750   2.126  0.03354 *  
-## educationmedium  1.35621    2.24513   0.604  0.54582    
-## educationhigh    3.03972    2.25362   1.349  0.17745    
-## irsd_sa1         0.72676    0.17124   4.244 2.23e-05 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 16.9 on 5668 degrees of freedom
-## Multiple R-squared:  0.03074,    Adjusted R-squared:  0.02971 
-## F-statistic: 29.96 on 6 and 5668 DF,  p-value: < 2.2e-16
 ```
 
-In this model, most predicted results were slightly under-estimated
-compared with the observed values (median -5.6 mMET hours/week; IQR
--11.7 to 6.3).
-
-#### Modelling zero mMETS hours/week
-
 ``` r
+# Logistic regression model of zero mMETS hours/week
 m.mMETs_recreational$zeroModel <- glm(
-    mmet_hrs_wk_recreation_zero ~ female+age_years+is_employed+education+irsd_sa1,
+    mmet_hrs_wk_recreation_zero ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
     family = "binomial",
     data = pa_data
 )
 
-summary(m.mMETs_recreational$zeroModel)
-## 
-## Call:
-## glm(formula = mmet_hrs_wk_recreation_zero ~ female + age_years + 
-##     is_employed + education + irsd_sa1, family = "binomial", 
-##     data = pa_data)
-## 
-## Coefficients:
-##                  Estimate Std. Error z value Pr(>|z|)    
-## (Intercept)      0.011910   0.220602   0.054    0.957    
-## female           0.061363   0.050981   1.204    0.229    
-## age_years        0.009021   0.001764   5.114 3.16e-07 ***
-## is_employed     -0.077738   0.061589  -1.262    0.207    
-## educationmedium -0.296728   0.184373  -1.609    0.108    
-## educationhigh   -0.948681   0.187114  -5.070 3.98e-07 ***
-## irsd_sa1        -0.207157   0.018654 -11.105  < 2e-16 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for binomial family taken to be 1)
-## 
-##     Null deviance: 10026.5  on 8157  degrees of freedom
-## Residual deviance:  9523.6  on 8151  degrees of freedom
-## AIC: 9537.6
-## 
-## Number of Fisher Scoring iterations: 4
+summ(m.mMETs_recreational$zeroModel, confint = TRUE, digits = 3)
 ```
 
-Considering the non-normal nature of mMET hours/week, which is a
-positively skewed rate variable (a non-negative count of hours per
-week), it is worth considering whether a Poisson model might be more
-appropriate and provide a better fit.
+|                    |                             |
+|:-------------------|----------------------------:|
+| Observations       |                        8158 |
+| Dependent variable | mmet_hrs_wk_recreation_zero |
+| Type               |    Generalized linear model |
+| Family             |                    binomial |
+| Link               |                       logit |
+
+ 
+
+|                         |          |
+|:------------------------|---------:|
+| χ²(22)                  |  557.625 |
+| p                       |    0.000 |
+| Pseudo-R² (Cragg-Uhler) |    0.093 |
+| Pseudo-R² (McFadden)    |    0.055 |
+| AIC                     | 9563.903 |
+| BIC                     | 9725.058 |
+
+ 
+
+|                                         |   Est. |   2.5% |  97.5% |  z val. |     p |
+|:----------------------------------------|-------:|-------:|-------:|--------:|------:|
+| (Intercept)                             | -0.408 | -0.635 | -0.181 |  -3.522 | 0.000 |
+| female                                  |  0.061 | -0.040 |  0.161 |   1.185 | 0.236 |
+| AGEB18-19                               |  0.137 | -0.581 |  0.855 |   0.374 | 0.709 |
+| AGEB20-24                               | -0.274 | -0.603 |  0.055 |  -1.634 | 0.102 |
+| AGEB25-29                               | -0.198 | -0.443 |  0.048 |  -1.577 | 0.115 |
+| AGEB30-34                               | -0.056 | -0.277 |  0.165 |  -0.497 | 0.619 |
+| AGEB40-44                               |  0.054 | -0.167 |  0.274 |   0.477 | 0.633 |
+| AGEB45-49                               | -0.048 | -0.270 |  0.174 |  -0.421 | 0.674 |
+| AGEB50-54                               |  0.068 | -0.158 |  0.294 |   0.587 | 0.557 |
+| AGEB55-59                               |  0.074 | -0.150 |  0.298 |   0.649 | 0.516 |
+| AGEB60-64                               |  0.053 | -0.174 |  0.280 |   0.459 | 0.646 |
+| AGEB65-69                               | -0.150 | -0.397 |  0.097 |  -1.191 | 0.234 |
+| AGEB70-74                               |  0.129 | -0.125 |  0.382 |   0.996 | 0.319 |
+| AGEB75-79                               |  0.244 | -0.052 |  0.539 |   1.617 | 0.106 |
+| AGEB80-84                               |  0.797 |  0.462 |  1.131 |   4.670 | 0.000 |
+| AGEB≥85                                 |  1.203 |  0.808 |  1.598 |   5.967 | 0.000 |
+| is_employed                             | -0.092 | -0.220 |  0.037 |  -1.393 | 0.164 |
+| educationlow                            |  0.219 | -0.148 |  0.585 |   1.169 | 0.243 |
+| educationhigh                           | -0.647 | -0.751 | -0.543 | -12.193 | 0.000 |
+| irsd_sa1_quintile_cat1 (most deprived)  |  0.310 |  0.153 |  0.467 |   3.875 | 0.000 |
+| irsd_sa1_quintile_cat2                  |  0.114 | -0.033 |  0.262 |   1.516 | 0.129 |
+| irsd_sa1_quintile_cat4                  | -0.288 | -0.438 | -0.139 |  -3.772 | 0.000 |
+| irsd_sa1_quintile_cat5 (least deprived) | -0.530 | -0.684 | -0.376 |  -6.733 | 0.000 |
+|  Standard errors: MLE                   |        |        |        |         |       |
 
 ``` r
-hist(pa_data$mmet_hrs_wk_recreation) 
-```
-
-![](jibe-melbourne-physical-activity_files/figure-commonmark/consider_model_for_rate_data-1.png)
-
-``` r
-hist(log(pa_data$mmet_hrs_wk_recreation))
-```
-
-![](jibe-melbourne-physical-activity_files/figure-commonmark/consider_model_for_rate_data-2.png)
-
-``` r
-summary(pa_data$mmet_hrs_wk_recreation)
-##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##     0.0     0.0     5.0    11.4    16.5   147.0
-mean_mmet <- mean(pa_data$mmet_hrs_wk_recreation)
-var_mmet <- var(pa_data$mmet_hrs_wk_recreation)
-
-print(paste("Mean:", mean_mmet))
-## [1] "Mean: 11.3956658086132"
-print(paste("Variance:", var_mmet))
-## [1] "Variance: 261.523882062808"
-if (var_mmet > 2 * mean_mmet) {
-    print("var_mmet > 2 * mean_mmet (Consider using a Negative Binomial or Zero-Inflated Negative Binomial model due to overdispersion)")
-}
-## [1] "var_mmet > 2 * mean_mmet (Consider using a Negative Binomial or Zero-Inflated Negative Binomial model due to overdispersion)"
-```
-
-The model may appear appoximately normally distributed on a log scale,
-it also has considerably over-dispersion so a negative binomial model
-may be appropriate, potentially accounting for the large number of
-zeros.
-
-``` r
-library(MASS)
-library(pscl)
-
-m.mMETs_recreational$neg_binom <- glm.nb(
-    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1,
-    data = pa_data
+# Negative binomial model for amount of mMET hours/week physical activity
+m.mMETs_recreational$neg_binom_over0 <- glm.nb(
+    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    data = pa_data_over0
 )
 
-summary(m.mMETs_recreational$neg_binom)
-## 
-## Call:
-## glm.nb(formula = mmet_hrs_wk_recreation ~ female + age_years + 
-##     is_employed + education + irsd_sa1, data = pa_data, init.theta = 0.4059568459, 
-##     link = log)
-## 
-## Coefficients:
-##                  Estimate Std. Error z value Pr(>|z|)    
-## (Intercept)      1.961664   0.171756  11.421  < 2e-16 ***
-## female          -0.268164   0.036186  -7.411 1.26e-13 ***
-## age_years       -0.006163   0.001268  -4.859 1.18e-06 ***
-## is_employed      0.134090   0.044912   2.986 0.002830 ** 
-## educationmedium  0.261049   0.148348   1.760 0.078458 .  
-## educationhigh    0.568500   0.149750   3.796 0.000147 ***
-## irsd_sa1         0.111184   0.013397   8.300  < 2e-16 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for Negative Binomial(0.406) family taken to be 1)
-## 
-##     Null deviance: 9527.0  on 8157  degrees of freedom
-## Residual deviance: 9172.2  on 8151  degrees of freedom
-## AIC: 52911
-## 
-## Number of Fisher Scoring iterations: 1
-## 
-## 
-##               Theta:  0.40596 
-##           Std. Err.:  0.00712 
-## 
-##  2 x log-likelihood:  -52895.36700
-
-# Zero-Inflated Negative Binomial model
-pa_data$mmet_hrs_wk_recreation_round <- round(pa_data$mmet_hrs_wk_recreation)
-
-m.mMETs_recreational$zinb <- zeroinfl(
-    mmet_hrs_wk_recreation_round ~ female + age_years + is_employed + education + irsd_sa1 | female + age_years + is_employed + education + irsd_sa1,
-    data = pa_data,
-    dist = "negbin"
-)
-
-# Summary of the Zero-Inflated Negative Binomial model
-summary(m.mMETs_recreational$zinb)
-## 
-## Call:
-## zeroinfl(formula = mmet_hrs_wk_recreation_round ~ female + age_years + 
-##     is_employed + education + irsd_sa1 | female + age_years + is_employed + 
-##     education + irsd_sa1, data = pa_data, dist = "negbin")
-## 
-## Pearson residuals:
-##     Min      1Q  Median      3Q     Max 
-## -0.8547 -0.6503 -0.3881  0.3068  9.6822 
-## 
-## Count model coefficients (negbin with log link):
-##                  Estimate Std. Error z value Pr(>|z|)    
-## (Intercept)      2.564554   0.160300  15.998  < 2e-16 ***
-## female          -0.277879   0.029181  -9.523  < 2e-16 ***
-## age_years       -0.003029   0.001066  -2.842 0.004478 ** 
-## is_employed      0.102191   0.036514   2.799 0.005132 ** 
-## educationmedium  0.139622   0.145291   0.961 0.336558    
-## educationhigh    0.253521   0.145686   1.740 0.081825 .  
-## irsd_sa1         0.049026   0.010973   4.468  7.9e-06 ***
-## Log(theta)      -0.100787   0.027872  -3.616 0.000299 ***
-## 
-## Zero-inflation model coefficients (binomial with logit link):
-##                  Estimate Std. Error z value Pr(>|z|)    
-## (Intercept)     -0.214384   0.259826  -0.825    0.409    
-## female          -0.007305   0.063315  -0.115    0.908    
-## age_years        0.010793   0.002237   4.824 1.40e-06 ***
-## is_employed     -0.066264   0.076508  -0.866    0.386    
-## educationmedium -0.266808   0.210002  -1.271    0.204    
-## educationhigh   -1.032516   0.215043  -4.801 1.58e-06 ***
-## irsd_sa1        -0.238384   0.023429 -10.175  < 2e-16 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1 
-## 
-## Theta = 0.9041 
-## Number of iterations in BFGS optimization: 21 
-## Log-likelihood: -2.596e+04 on 15 Df
+summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
 ```
+
+|                    |                          |
+|:-------------------|-------------------------:|
+| Observations       |                     5645 |
+| Dependent variable |   mmet_hrs_wk_recreation |
+| Type               | Generalized linear model |
+| Family             | Negative Binomial(1.248) |
+| Link               |                      log |
+
+ 
+
+|                         |           |
+|:------------------------|----------:|
+| χ²(5622)                |   289.485 |
+| p                       |     0.000 |
+| Pseudo-R² (Cragg-Uhler) |     0.050 |
+| Pseudo-R² (McFadden)    |     0.007 |
+| AIC                     | 42930.206 |
+| BIC                     | 43089.531 |
+
+ 
+
+|                                         |   Est. |   2.5% |  97.5% | z val. |     p |
+|:----------------------------------------|-------:|-------:|-------:|-------:|------:|
+| (Intercept)                             |  2.759 |  2.644 |  2.875 | 46.853 | 0.000 |
+| female                                  | -0.249 | -0.298 | -0.200 | -9.881 | 0.000 |
+| AGEB18-19                               |  0.502 |  0.080 |  0.923 |  2.332 | 0.020 |
+| AGEB20-24                               |  0.157 |  0.006 |  0.308 |  2.038 | 0.042 |
+| AGEB25-29                               |  0.215 |  0.104 |  0.327 |  3.786 | 0.000 |
+| AGEB30-34                               |  0.019 | -0.085 |  0.123 |  0.362 | 0.717 |
+| AGEB40-44                               |  0.000 | -0.105 |  0.106 |  0.009 | 0.993 |
+| AGEB45-49                               |  0.136 |  0.031 |  0.241 |  2.548 | 0.011 |
+| AGEB50-54                               |  0.115 |  0.004 |  0.226 |  2.026 | 0.043 |
+| AGEB55-59                               |  0.083 | -0.027 |  0.194 |  1.474 | 0.140 |
+| AGEB60-64                               |  0.088 | -0.025 |  0.200 |  1.530 | 0.126 |
+| AGEB65-69                               |  0.146 |  0.026 |  0.266 |  2.377 | 0.017 |
+| AGEB70-74                               | -0.007 | -0.139 |  0.125 | -0.102 | 0.919 |
+| AGEB75-79                               | -0.273 | -0.435 | -0.110 | -3.291 | 0.001 |
+| AGEB80-84                               | -0.255 | -0.465 | -0.045 | -2.382 | 0.017 |
+| AGEB≥85                                 | -0.451 | -0.719 | -0.184 | -3.303 | 0.001 |
+| is_employed                             |  0.077 |  0.009 |  0.144 |  2.237 | 0.025 |
+| educationlow                            | -0.075 | -0.322 |  0.172 | -0.597 | 0.550 |
+| educationhigh                           |  0.117 |  0.064 |  0.171 |  4.316 | 0.000 |
+| irsd_sa1_quintile_cat1 (most deprived)  | -0.155 | -0.244 | -0.065 | -3.399 | 0.001 |
+| irsd_sa1_quintile_cat2                  | -0.063 | -0.142 |  0.016 | -1.571 | 0.116 |
+| irsd_sa1_quintile_cat4                  | -0.020 | -0.094 |  0.053 | -0.547 | 0.584 |
+| irsd_sa1_quintile_cat5 (least deprived) |  0.056 | -0.016 |  0.127 |  1.526 | 0.127 |
+|  Standard errors: MLE                   |        |        |        |        |       |
+
+### Evaluating model fit
+
+#### Binary predictions of any recreational physical activity being undertaken.
 
 ``` r
-# Compare AIC values
-aic_values <- data.frame(
-    Model = c("Linear", "Binomial", "neg_binom", "zinb"),
-    AIC = c(
-        AIC(m.mMETs_recreational$linear), 
-        AIC(m.mMETs_recreational$zeroModel), 
-        AIC(m.mMETs_recreational$neg_binom),
-        AIC(m.mMETs_recreational$zinb)
-    )
-)
-print(aic_values)
-##       Model       AIC
-## 1    Linear 48202.418
-## 2  Binomial  9537.568
-## 3 neg_binom 52911.367
-## 4      zinb 51955.672
+predicted_probabilities <- predict(m.mMETs_recreational$zeroModel, type = "response")
+predicted_binary <- ifelse(predicted_probabilities > 0.5, 1, 0)
+observed_binary <- pa_data$mmet_hrs_wk_recreation_zero
+confusion_matrix <- table(Predicted = predicted_binary, Observed = observed_binary)
+print(confusion_matrix)
+##          Observed
+## Predicted    0    1
+##         0 5413 2240
+##         1  232  273
 ```
 
-### Predictions
+#### Combined-model predictions
+
+Predictions of amount of physical activity.
+
+``` r
+nonzero_predictions <- predict(
+    m.mMETs_recreational$neg_binom_over0, 
+    type = "response", 
+    newdata = pa_data)
+combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
+
+# Evaluate the model
+observed_values <- pa_data$mmet_hrs_wk_recreation
+results <- data.frame(
+    observed_values = observed_values,
+    combined_predictions = combined_predictions
+)
+ggplot(results, aes(x = observed_values, y = combined_predictions)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+    labs(
+        title = "Scatter Plot of Observed vs. Predicted mMET Hours/Week",
+        x = "Observed mMET Hours/Week",
+        y = "Predicted mMET Hours/Week"
+    ) +
+    theme_minimal()
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/review_combined_predictions-1.png)
+
+Lets look at effects from the main predictive model for amount of mMET
+hours/week:
+
+``` r
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = AGEB, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/effects-plots-1.png)
+
+``` r
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = female, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/effects-plots-2.png)
+
+``` r
+            
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = education, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/effects-plots-3.png)
+
+``` r
+            
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = is_employed, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/effects-plots-4.png)
+
+``` r
+            
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = irsd_sa1_quintile_cat, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/effects-plots-5.png)
+
+### Prediction of mMET hours/week for synthetic population
 
 ``` r
 MonteCarlo <- function(model, data,facetVar = NA) {
@@ -1004,247 +1240,38 @@ MonteCarlo <- function(model, data,facetVar = NA) {
 }
 ```
 
-``` r
-predicted_mmet <- predict(m.mMETs_recreational$zinb, type = "response")
-predicted_binary <- ifelse(predicted_mmet > 0, 1, 0)
-actual_binary <- ifelse(pa_data$mmet_hrs_wk_recreation > 0, 1, 0)
-confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
-print(confusion_matrix)
-##          Actual
-## Predicted    0    1
-##         1 2483 5675
-
-results <- data.frame(
-    predicted_mmet = predicted_mmet,
-    actual_binary = pa_data$actual_binary <- ifelse(pa_data$mmet_hrs_wk_recreation > 0, "Greater than 0", "0")
-)
-# Generate box plots
-ggplot(results, aes(x = actual_binary, y = predicted_mmet)) +
-    geom_boxplot() +
-    labs(
-        title = "Predicted mMET Hours/Week by Actual mMET Hours/Week > 0 Status",
-        x = "Actual mMET Hours/Week > 0 Status",
-        y = "Predicted mMET Hours/Week"
-    ) +
-    theme_minimal()
-```
-
-![](jibe-melbourne-physical-activity_files/figure-commonmark/predict-total-mMETs-nhs-1.png)
-
-While the model overestimates mMET hours for those who were estimated to
-have accrued none, those with none predicted were significantly lower
-which may be a more realistic estimate. (i.e. in the real world, it may
-be unlikely that zero physical activity is conducted, some physical
-activity does occur incidentally as a result of being alive, so the
-over-estimation of the ‘zero’ observed mMET hours/week may not be such a
-problem, necessarily).
-
-But … the original zero model still did by far the best at predicting
-zeros, perhaps using the zero model with negative binomial regression
-for the over zeros would be the best model.
+#### Prediction of adults undertaking any recreational physical activity
 
 ``` r
-m.mMETs_recreational$neg_binom_over0 <- glm.nb(
-    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1,
-    data = pa_data_over0
-)
-
-summary(m.mMETs_recreational$neg_binom_over0)
-## 
-## Call:
-## glm.nb(formula = mmet_hrs_wk_recreation ~ female + age_years + 
-##     is_employed + education + irsd_sa1, data = pa_data_over0, 
-##     init.theta = 1.219615465, link = log)
-## 
-## Coefficients:
-##                   Estimate Std. Error z value Pr(>|z|)    
-## (Intercept)      2.6755083  0.1406500  19.022  < 2e-16 ***
-## female          -0.2593484  0.0253337 -10.237  < 2e-16 ***
-## age_years       -0.0029654  0.0009167  -3.235  0.00122 ** 
-## is_employed      0.0942392  0.0321723   2.929  0.00340 ** 
-## educationmedium  0.1118735  0.1265456   0.884  0.37667    
-## educationhigh    0.2174604  0.1269927   1.712  0.08683 .  
-## irsd_sa1         0.0452333  0.0095310   4.746 2.08e-06 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for Negative Binomial(1.2196) family taken to be 1)
-## 
-##     Null deviance: 6500.6  on 5674  degrees of freedom
-## Residual deviance: 6277.4  on 5668  degrees of freedom
-## AIC: 43149
-## 
-## Number of Fisher Scoring iterations: 1
-## 
-## 
-##               Theta:  1.2196 
-##           Std. Err.:  0.0230 
-## 
-##  2 x log-likelihood:  -43133.2230
-
-# Compare AIC values
-aic_values <- data.frame(
-    Model = c("Linear", "Binomial", "neg_binom", "zinb","neg_binom_over0"),
-    AIC = c(
-        AIC(m.mMETs_recreational$linear), 
-        AIC(m.mMETs_recreational$zeroModel), 
-        AIC(m.mMETs_recreational$neg_binom),
-        AIC(m.mMETs_recreational$zinb),
-        AIC(m.mMETs_recreational$neg_binom_over0)
-    )
-)
-print(aic_values)
-##             Model       AIC
-## 1          Linear 48202.418
-## 2        Binomial  9537.568
-## 3       neg_binom 52911.367
-## 4            zinb 51955.672
-## 5 neg_binom_over0 43149.223
-```
-
-The combination of negative binomial model with the zero model appears
-to outperform the linear model.
-
-``` r
-# Make predictions using the zero model
-predicted_probabilities <- predict(m.mMETs_recreational$zeroModel, type = "response")
-
-# Convert predicted probabilities to binary outcomes using a threshold of 0.5
-predicted_binary <- ifelse(predicted_probabilities > 0.5, 1, 0)
-
-# Actual binary outcomes
-actual_binary <- pa_data$mmet_hrs_wk_recreation_zero
-
-# Generate the confusion matrix
-confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
-print(confusion_matrix)
-##          Actual
-## Predicted    0    1
-##         0 5447 2230
-##         1  228  253
-```
-
-Review the combined predictions
-
-``` r
-nonzero_predictions <- predict(
-    m.mMETs_recreational$neg_binom_over0, 
-    type = "response", 
-    newdata = pa_data)
-combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
-
-# Evaluate the model
-actual_values <- pa_data$mmet_hrs_wk_recreation
-results <- data.frame(
-    actual_values = actual_values,
-    combined_predictions = combined_predictions
-)
-ggplot(results, aes(x = actual_values, y = combined_predictions)) +
-    geom_point(alpha = 0.5) +
-    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-    labs(
-        title = "Scatter Plot of Actual vs. Predicted mMET Hours/Week",
-        x = "Actual mMET Hours/Week",
-        y = "Predicted mMET Hours/Week"
-    ) +
-    theme_minimal()
-```
-
-![](jibe-melbourne-physical-activity_files/figure-commonmark/review_combined_predictions-1.png)
-
-Save the model outputs for usage later
-
-``` r
-# Get today's date
-today_date <- format(Sys.Date(), "%d%m%Y")
-
-# Save the RDS file with today's date in the filename
-saveRDS(m.mMETs_recreational, paste0("model_total_mMETs_", today_date, ".rds"))
-```
-
-#### Predicting mMET hours/week for synthetic population
-
-Now we need to get our synthetic population data into the equivalent
-format to our model, e.g. by converting string categorical variables to
-binary indicators and adapting the SEIFA IRSD to quintiles. Then we can
-use our predictions and apply them to the synthetic population.
-
-``` r
-# Perform the transformations
-pp[, `:=`(
-    irsd_sa1 = fifelse(IRSAD %in% c(1, 2), 1,
-                fifelse(IRSAD %in% c(3, 4), 2,
-                fifelse(IRSAD %in% c(5, 6), 3,
-                fifelse(IRSAD %in% c(7, 8), 4,
-                fifelse(IRSAD %in% c(9, 10), 5, NA_real_))))),
-    age_years = Age,
-    female = fifelse(Gender == "Female", 1, 0),
-    is_employed = fifelse(is_employed == "Yes", 1, 0),
-    education = fifelse(education == 'high', 2,
-                fifelse(education == 'medium', 1,
-                fifelse(education == 'low', 0, NA_real_)))
-)]
-
-# Convert education to a factor
-pp[, education := factor(education, levels = 0:2, labels = c('low', 'medium', 'high'), ordered = FALSE)]
-
-# Select the relevant columns
-data <- pp[, .(AgentId, age_years, female, is_employed, education, irsd_sa1)]
-  
-
-data %>% st(out='kable')
-```
-
-| Variable    | N       | Mean    | Std. Dev. | Min | Pctl. 25 | Pctl. 75 | Max     |
-|:------------|:--------|:--------|:----------|:----|:---------|:---------|:--------|
-| AgentId     | 4174097 | 2087049 | 1204958   | 1   | 1043525  | 3130573  | 4174097 |
-| age_years   | 4174097 | 37      | 22        | -1  | 19       | 53       | 104     |
-| female      | 4174097 | 0.51    | 0.5       | 0   | 0        | 1        | 1       |
-| is_employed | 4174097 | 0       | 0         | 0   | 0        | 0        | 0       |
-| education   | 4174097 |         |           |     |          |          |         |
-| … low       | 1148285 | 28%     |           |     |          |          |         |
-| … medium    | 1989777 | 48%     |           |     |          |          |         |
-| … high      | 1036035 | 25%     |           |     |          |          |         |
-| irsd_sa1    | 4167715 | 3.3     | 1.3       | 1   | 2        | 4        | 5       |
-
-Summary Statistics
-
-#### Prediction of mMET hours/week for synethic population
-
-``` r
-prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
-table(prediction$zeroPrediction)
+mmets_prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
+table(mmets_prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 2747986 1419729
+## 2109167 1084646
 ```
 
-#### Join estimates back onto synthetic population
+#### Prediction of amount of recreational physical activity
 
 ``` r
-nonzeroPP <- prediction %>% filter(!zeroPrediction)
+setDT(mmets_prediction)
 
-nonzeroPP_predict <- nonzeroPP %>% mutate(
-    mMETs_recreational = predict(m.mMETs_recreational$linear, nonzeroPP)
-)
-
-pp <- pp %>% 
-      left_join(
-        nonzeroPP_predict %>% dplyr::select('AgentId','mMETs_recreational')
-      )
-pp <- pp %>% mutate(
-    mMETs_recreational = ifelse(is.na(mMETs_recreational), 0, mMETs_recreational)
-)
-summary(pp$mMETs_recreational)
-##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##    0.00    0.00   13.42   10.26   16.66   21.29
-ggplot(pp)+stat_ecdf(aes(x=mMETs_recreational))
+mmets_prediction[, mMETs_recreational := ifelse(
+  zeroPrediction == FALSE,
+  predict(m.mMETs_recreational$neg_binom_over0, .SD, type = "response"),
+  0
+)]
 ```
 
-![](jibe-melbourne-physical-activity_files/figure-commonmark/synpop-prediction-outputs-1.png)
+#### Join estimates to synthetic population
 
 ``` r
-fwrite(pp,"pp_health_2021_mMETS_recreational.csv")
+synpop[mmets_prediction,on='AgentId',mMETs_recreational := i.mMETs_recreational]
+summary(synpop$mMETs_recreational)
+ggplot(synpop)+stat_ecdf(aes(x=mMETs_recreational))
+```
+
+``` r
+fwrite(synpop,"pp_health_2021_mMETS_recreational.csv")
 ```
 
 ``` r
@@ -1253,9 +1280,9 @@ layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(1,8))
  
 # Draw the boxplot and the histogram 
 par(mar=c(0, 3.1, 1.1, 2.1))
-boxplot(pp$mMETs_recreational, horizontal=TRUE , ylim=c(0,30), xaxt="n" , col=rgb(0.8,0.8,0,0.5) , frame=F)
+boxplot(synpop$mMETs_recreational, horizontal=TRUE , ylim=c(0,30), xaxt="n" , col=rgb(0.8,0.8,0,0.5) , frame=F)
 par(mar=c(4, 3.1, 1.1, 2.1))
-hist(pp$mMETs_recreational, breaks=40 , col=rgb(0.2,0.8,0.5,0.5) , border=F , main="" , xlab="Predicted mMET hours/week", xlim=c(0,30))
+hist(synpop$mMETs_recreational, breaks=40 , col=rgb(0.2,0.8,0.5,0.5) , border=F , main="" , xlab="Predicted mMET hours/week", xlim=c(0,30))
 ```
 
 ![](jibe-melbourne-physical-activity_files/figure-commonmark/boxplot-mMETs_recreational-1.png)
@@ -1270,17 +1297,17 @@ mmets_comparison <- rbind(
     cbind(
         summary=desc, 
         sex="Men",
-        summary_stats(pp %>% filter(Gender=='Male'),var)
+        summary_stats(synpop %>% filter(Gender=='Male'),var)
     ),
     cbind(
         summary=desc, 
         sex="Women",
-        summary_stats(pp %>% filter(Gender=='Female'),var)
+        summary_stats(synpop %>% filter(Gender=='Female'),var)
     ),
     cbind(
         summary=desc, 
         sex="Overall",
-        summary_stats(pp,var)
+        summary_stats(synpop,var)
     )
 )
 
@@ -1297,15 +1324,15 @@ knitr::kable(
 | meta-analysis (total) | Men | \- | 18.70 | \- | 0 | 2.73 | 10.66 | 23.87 | 156.45 |
 | meta-analysis (total) | Women | \- | 17.35 | \- | 0 | 2.61 | 10.66 | 22.82 | 103.60 |
 | meta-analysis (total) | Overall | \- | 16.91 | \- | 0 | 2.35 | 10.50 | 22.50 | 130.02 |
-| NHS (total) | Men | 7552 | 14.48 | 18.87 | 0 | 1.25 | 7.50 | 21.00 | 153.00 |
-| NHS (total) | Women | 8766 | 11.57 | 15.33 | 0 | 1.25 | 6.25 | 16.08 | 207.00 |
-| NHS (total) | Overall | 16318 | 12.92 | 17.12 | 0 | 1.25 | 6.67 | 17.50 | 207.00 |
-| NHS (recreation) | Men | 7575 | 11.47 | 17.20 | 0 | 0.00 | 4.00 | 16.50 | 147.00 |
-| NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 3.60 | 12.25 | 182.00 |
-| NHS (recreation) | Overall | 16359 | 10.05 | 15.48 | 0 | 0.00 | 3.75 | 14.00 | 182.00 |
-| Synthetic population (recreation) | Men | 2045535 | 11.81 | 8.49 | 0 | 0.00 | 16.72 | 18.33 | 21.29 |
-| Synthetic population (recreation) | Women | 2128562 | 8.77 | 6.54 | 0 | 0.00 | 12.27 | 14.04 | 16.96 |
-| Synthetic population (recreation) | Overall | 4174097 | 10.26 | 7.71 | 0 | 0.00 | 13.42 | 16.66 | 21.29 |
+| NHS (total) | Men | 7552 | 14.46 | 18.88 | 0 | 1.00 | 8.00 | 21.00 | 153.00 |
+| NHS (total) | Women | 8766 | 11.57 | 15.34 | 0 | 1.00 | 6.00 | 16.00 | 207.00 |
+| NHS (total) | Overall | 16318 | 12.91 | 17.13 | 0 | 1.00 | 7.00 | 18.00 | 207.00 |
+| NHS (recreation) | Men | 7575 | 11.47 | 17.20 | 0 | 0.00 | 4.00 | 16.00 | 147.00 |
+| NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 4.00 | 12.00 | 182.00 |
+| NHS (recreation) | Overall | 16359 | 10.05 | 15.49 | 0 | 0.00 | 4.00 | 14.00 | 182.00 |
+| Synthetic population (recreation) | Men | 1542991 | 11.88 | 8.72 | 0 | 0.00 | 16.10 | 18.47 | 31.00 |
+| Synthetic population (recreation) | Women | 1650822 | 9.13 | 6.87 | 0 | 0.00 | 12.55 | 14.54 | 24.17 |
+| Synthetic population (recreation) | Overall | 3193813 | 10.46 | 7.94 | 0 | 0.00 | 13.56 | 16.78 | 31.00 |
 
 Marginal MET hours per week
 
@@ -1353,3 +1380,177 @@ hours/week that would be expected in the population, if the purpose of
 the synthetic population is for inference on average effects for the
 basic range of included covariates, these estimates should be adequate
 for usage as exposures in the health modelling.
+
+## Sensitivity analysis
+
+### Age as categorical or continuous
+
+Age appears to be only mildly non-linear, and basically appears
+associated with a monotonic reduction in mMET hours/week as one ages,
+with a steeper rate of decline beyond age 70. However, in a model there
+could be advantages for approximating this as a linear process; were it
+to matter (it doesn’t for this use case, because the aim is not
+inference) there would be more statistical power modelling it as a
+continuous rather than categorical process. Categorical variables can
+also risk overfitting to noisy processes in the sample data. Let’s
+explore the influence of the choice.
+
+There may be some non-linearity (e.g. 18-19 year olds median METS are
+lower, but perhaps not meaningfully so), but broadly, younger people
+have higher mMETs:
+
+``` r
+ggplot(pa_data,aes(x=AGEB, y=mmet_hrs_wk_recreation)) + geom_boxplot() + coord_flip()
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/visualise-age-distribution-1.png)
+
+``` r
+qplot(x=pa_data$age_years,y=pa_data$mmet_hrs_wk_recreation, geom='smooth', span =0.5)
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/visualise-age-distribution-2.png)
+
+Looking at the qplot, to me it seems reasonable on grounds of parsimony
+to model the relationship between age and mMET hours/week as a linear
+function. There is a drop off after 70, however our data is relatively
+sparse beyond there and our last category does capture persons older
+than 85. Its easier to interpret the story from the qplot than boxplots
+too.
+
+On the other hand, because the purpose of this model is for prediction
+rather than inference, maybe it would make sense to leave as a
+categorical variable. This would match the approach taken for
+Manchester, using age as a factor variable to account for non-linearity.
+
+``` r
+m.mMETs_recreational$neg_binom_over0_years <- glm.nb(
+    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1_quintile_cat,
+    data = pa_data_over0
+)
+
+summ(m.mMETs_recreational$neg_binom_over0_years, confint = TRUE, digits = 3)
+summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
+
+anova(m.mMETs_recreational$neg_binom_over0, m.mMETs_recreational$neg_binom_over0_years, test='LRT')
+```
+
+The model with years as continuous is easier to understand at a glance;
+it arguably more clearly indicates that there is an approximately linear
+negative association between age and recreational physical activity
+amount.
+
+However, the difference in AIC is negligible and slightly lower for the
+model with age as a categorical variable. Statistically, the likelihood
+ratio test also suggests the model with age as a categorical variable is
+the preferred model. The latter was ultimately used in the main
+analysis.
+
+### Hurdle model
+
+A hurdle model is a natural choice for rate data like marginal MET
+hours/week for recreation, because it can describe two distinct data
+generating processes: individuals’ undertaking of any recorded
+recreational physical activity, and mMET hours/week for those who
+undertake any. In the context of physical activity data, many
+individuals may report zero physical activity, while others report
+varying positive amounts. The hurdle model first models the probability
+of a zero versus a non-zero outcome using a binomial model, and then
+models the positive counts separately using a truncated count model
+(e.g., Poisson or Negative Binomial). This approach can allow for more
+accurate modeling of the data distribution when there is an excess of
+zeros and overdispersion in the positive counts, which is common in
+physical activity data.
+
+Considering the non-normal nature of mMET hours/week, which is a
+positively skewed rate variable (a non-negative count of hours per
+week), it is worth considering whether a Poisson model might be more
+appropriate and provide a better fit.
+
+``` r
+hist(pa_data$mmet_hrs_wk_recreation) 
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/consider_model_for_rate_data-1.png)
+
+``` r
+hist(log(pa_data$mmet_hrs_wk_recreation))
+```
+
+![](jibe-melbourne-physical-activity_files/figure-commonmark/consider_model_for_rate_data-2.png)
+
+``` r
+summary(pa_data$mmet_hrs_wk_recreation)
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##     0.0     0.0     5.0    11.4    16.0   147.0
+mean_mmet <- mean(pa_data$mmet_hrs_wk_recreation)
+var_mmet <- var(pa_data$mmet_hrs_wk_recreation)
+
+print(paste("Mean:", mean_mmet))
+## [1] "Mean: 11.3961755332189"
+print(paste("Variance:", var_mmet))
+## [1] "Variance: 261.594159700458"
+if (var_mmet > 2 * mean_mmet) {
+    print("var_mmet > 2 * mean_mmet (Consider using a Negative Binomial or Zero-Inflated Negative Binomial model due to overdispersion)")
+}
+## [1] "var_mmet > 2 * mean_mmet (Consider using a Negative Binomial or Zero-Inflated Negative Binomial model due to overdispersion)"
+```
+
+The model may appear appoximately normally distributed on a log scale,
+it also has considerably over-dispersion so a negative binomial model
+may be appropriate, potentially accounting for the large number of
+zeros.
+
+The various modelling choices are evaluated below to understand their
+implications on predictions.
+
+#### Linear, Poisson, or negative binomial?
+
+``` r
+library(pscl) # for zero-inflated model
+m.mMETs_recreational$linear <- lm(
+    mmet_hrs_wk_recreation ~ female + AGEB + is_employed+education + irsd_sa1_quintile_cat,
+    data = pa_data_over0)
+
+m.mMETs_recreational$poisson <- glm(
+    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    family = "poisson",
+    data = pa_data_over0
+)
+
+# zero-inflated model uses the full data as an alternative to the hurdle model
+m.mMETs_recreational$zinb <- zeroinfl(
+    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat | female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    data = pa_data,
+    dist = "negbin"
+)
+
+aic_values <- data.frame(
+    Model = c("Linear", "Poisson", "Negative binomial", "Zero-inflated negative binomial"),
+    AIC = c(
+        AIC(m.mMETs_recreational$linear), 
+        AIC(m.mMETs_recreational$poisson), 
+        AIC(m.mMETs_recreational$neg_binom_over0),
+        AIC(m.mMETs_recreational$zinb)
+    )
+)
+print(aic_values)
+##                             Model       AIC
+## 1                          Linear  47931.79
+## 2                         Poisson 100573.62
+## 3               Negative binomial  42930.21
+## 4 Zero-inflated negative binomial  51897.58
+```
+
+The negative binomial hurdle model appears to be the best model, and so
+was ultimately used in the main analysis.
+
+## Save output models
+
+``` r
+# Get today's date
+today_date <- format(Sys.Date(), "%d%m%Y")
+
+# Save the RDS file with today's date in the filename
+saveRDS(m.mMETs_recreational, paste0("model_recreational_mMETs_", today_date, ".rds"))
+```

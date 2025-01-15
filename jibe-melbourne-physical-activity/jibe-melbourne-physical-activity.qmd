@@ -42,9 +42,11 @@ Load libaries
 ```{r}
 #| label: load-libraries
 library(dplyr)
-library(vtable)
+library(vtable) # descrtiptive statistic model.tables
+library(jtools) # clean model summaries
 library(ggplot2)
 library(data.table)
+library(MASS) # for glm negative binomial model
 ```
 
 ## Data
@@ -117,18 +119,13 @@ data <- list(
 #| output: true
 
 nhs <- dplyr::left_join(
-            data$households %>% 
-                select(
-                    c( 
+            data$households[c( 
                         "ABSHIDB",
                         "STATE16", 
                         "NUMPERBC",
                         "SA1SF2DN"
-                    )
-                ),
-            data$persons %>% 
-                select(
-                    c(
+                    )],
+            data$persons[c(
                         "ABSHIDB",
                         "ABSPID",
                         "AGEB",
@@ -142,7 +139,7 @@ nhs <- dplyr::left_join(
                         "EXLWMMIN",
                         "EXLWVMIN"
                     )
-                ) %>% rename(
+                ] %>% rename(
                     walk_recreation_min=EXFSRMIN,
                     walk_transport_min=EXTRAMIN,
                     mod_excercise_min=EXLWMMIN,
@@ -160,14 +157,15 @@ nhs %>% st(out='kable')
 
 To predict recreationals mMETs for the synthetic population, we need to understand how the variables are structured and ensure that our NHS derived data that we will use in modelling has a comparable structure. We'll load up the data and consider a summary of variables to better understand this.
 
-I am using [data.table](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html) as it is meant to be optimised for handling large datasets, like this synthetic population. This performs subsequent operations deriving new variables much faster.
+I am using [data.table](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html) as it is meant to be optimised for handling large datasets, like this synthetic population. This performs subsequent operations deriving new variables much faster.  To ensure the source data that we'll later attach modelled results to remains otherwise unmodified, I'll also create a copy 'pp'.  The name 'pp' is used to refer to the synthetic population in related modelling work undertaken for Manchester.
 
 ```{r}
 #| label: load-synthetic-population-population_final.rds
 #| output: true
 population_final.rds <- file.choose()
-pp <- readRDS(population_final.rds) %>% as.data.table()
-pp %>% st(out='kable')
+synpop <- readRDS(population_final.rds) %>% as.data.table()
+synpop %>% st(out='kable')
+pp <- data.table(synpop)
 ```
 
 Considering the above, I think the following points are worth considering as model refinements:
@@ -195,7 +193,7 @@ To match the synthetic population data for Melbourne a binary indicator 'is_empl
 
 Education will be summarised using categories of low, medium and high for direct comparison with the synthetic population.
 
-Marginal metabolic equivalent hours per week (mMET hours/week; `mmet`) are calculated as the sum of hours spent walking for recreation, doing moderate exercise and doing vigorous exercise, with each respectively multiplied by the metabolic equivalent of these tasks (METs) minus one (already in MMETs in code).
+Marginal metabolic equivalent hours per week (mMET hours/week; `mmet`) are calculated as the sum of hours spent walking for recreation, doing moderate exercise and doing vigorous exercise, with each respectively multiplied by the metabolic equivalent of these tasks (METs) minus one (already in MMETs in code).  These have been rounded to integers to support consideration of negative binomial models, that may make sense for this type of positive skewed zero-inflated data (a possible alternative to a linear hurdle model).
 
 When deriving factor variables I have set ordered to False, as the alternative setting needlessly over-complicates the modelling (i.e. derives polynomial functions) and limits our capacity to transfer predictions for the synthetic population (see https://stackoverflow.com/questions/57297771/interpretation-of-l-q-c-4-for-logistic-regression).
 
@@ -236,65 +234,75 @@ pa_data <- nhs  %>%
             SA1SF2DN %in% c(5, 6) ~ 3,
             SA1SF2DN %in% c(7, 8) ~ 4,
             SA1SF2DN %in% c(9, 10) ~ 5
+        ),
+        irsd_sa1_quintile_cat = factor(
+            irsd_sa1, 
+            levels = 1:5, 
+            labels = c("1 (most deprived)", "2", "3 (reference)", "4", "5 (least deprived)")
         )
     ) %>% 
-  mutate(
-    age_years = case_when(
-        AGEB == 5 ~ 18,
-        AGEB == 6 ~ 20,
-        AGEB == 7 ~ 25,
-        AGEB == 8 ~ 30,
-        AGEB == 9 ~ 35,
-        AGEB == 10 ~ 40,
-        AGEB == 11 ~ 45,
-        AGEB == 12 ~ 50,
-        AGEB == 13 ~ 55,
-        AGEB == 14 ~ 60,
-        AGEB == 15 ~ 65,
-        AGEB == 16 ~ 70,
-        AGEB == 17 ~ 75,
-        AGEB == 18 ~ 80,
-        AGEB == 19 ~ 85,
-        TRUE ~ NA_real_  # Handle unexpected values
-    ),
-        AGEB = factor(
-            AGEB, 
-            levels = 5:19, 
-            labels = c("18-19","20-24", "25-29", "30-34", "35-39", 
-                        "40-44", "45-49", "50-54", "55-59", 
-                        "60-64", "65-69", "70-74", "75-79", 
-                        "80-84", "≥85"),
-            ordered = FALSE
+    mutate(
+        irsd_sa1_quintile_cat = relevel(irsd_sa1_quintile_cat, ref = "3 (reference)")
+    ) %>%
+    mutate(
+        age_years = case_when(
+            AGEB == 5 ~ 18,
+            AGEB == 6 ~ 20,
+            AGEB == 7 ~ 25,
+            AGEB == 8 ~ 30,
+            AGEB == 9 ~ 35,
+            AGEB == 10 ~ 40,
+            AGEB == 11 ~ 45,
+            AGEB == 12 ~ 50,
+            AGEB == 13 ~ 55,
+            AGEB == 14 ~ 60,
+            AGEB == 15 ~ 65,
+            AGEB == 16 ~ 70,
+            AGEB == 17 ~ 75,
+            AGEB == 18 ~ 80,
+            AGEB == 19 ~ 85,
+            TRUE ~ NA_real_  # Handle unexpected values
         ),
-    female=ifelse(SEX==2,1,0),
-    is_employed=case_when(
-            LFSBC==1 ~ 1,
-            LFSBC %in% c(0,2,3) ~ 0
-        ),
-    is_student=ifelse(STDYFTPT %in% c(1,2),1,0),
-    education = case_when(
-        HIGHLVBC %in% c(1,2) ~ 2,
-        HIGHLVBC %in% c(3,7) ~ 1,
-        HIGHLVBC %in% c(8,12) ~ 0,
-        TRUE ~ NA_real_  # Handle unexpected values
-        ),
-    education = factor(
-        education,
-        levels=0:2,
-        labels=c('low','medium','high'),
-        ordered=FALSE
-    )
+            AGEB = factor(
+                AGEB, 
+                levels = 5:19, 
+                labels = c("18-19","20-24", "25-29", "30-34", "35-39", 
+                            "40-44", "45-49", "50-54", "55-59", 
+                            "60-64", "65-69", "70-74", "75-79", 
+                            "80-84", "≥85"),
+                ordered = FALSE
+            ),
+        female=ifelse(SEX==2,1,0),
+        is_employed=case_when(
+                LFSBC==1 ~ 1,
+                LFSBC %in% c(0,2,3) ~ 0
+            ),
+        is_student=ifelse(STDYFTPT %in% c(1,2),1,0),
+        education = case_when(
+            HIGHLVBC %in% c(1,2) ~ 2,
+            HIGHLVBC %in% c(3,7) ~ 1,
+            HIGHLVBC %in% c(8,12) ~ 0,
+            TRUE ~ NA_real_  # Handle unexpected values
+            ),
+        education = factor(
+            education,
+            levels=0:2,
+            labels=c('low','medium','high'),
+            ordered=FALSE
+        )
     )  %>%
     mutate(
-        mmet_hrs_wk_recreation =
+        mmet_hrs_wk_recreation = round(
             walk_recreation_min/60* MMET_WALKING + 
             mod_excercise_min/60 * MMET_MOD + 
-            vig_excercise_min/60 * MMET_VIG, 
-        mmet_hrs_wk_total = 
+            vig_excercise_min/60 * MMET_VIG
+            ), 
+        mmet_hrs_wk_total = round(
             walk_transport_min/60 * MMET_WALKING + 
             walk_recreation_min/60* MMET_WALKING +
             mod_excercise_min/60 * MMET_MOD + 
-            vig_excercise_min/60 * MMET_VIG,
+            vig_excercise_min/60 * MMET_VIG
+        ),
         mmet_hrs_wk_recreation_zero = ifelse(mmet_hrs_wk_recreation == 0, 1, 0)
     ) 
 
@@ -322,6 +330,31 @@ summary_stats <- function(
             max = max(get(variable), na.rm = TRUE)
         ) 
     return (summary.table)
+}
+
+
+summary_stats_by <- function(
+    data,
+    variable,
+    by
+) {
+    library(dplyr)
+    grouped_data <- data %>% group_by(get(by))
+    summary_table <- grouped_data %>% 
+        summarise(
+            n = n(),
+            count = sum(!is.na(get(variable))),
+            mean = mean(get(variable), na.rm = TRUE),
+            sd = sd(get(variable), na.rm = TRUE),
+            min = min(get(variable), na.rm = TRUE),
+            p25 = quantile(get(variable), 0.25, na.rm = TRUE),
+            p50 = median(get(variable), na.rm = TRUE),
+            p75 = quantile(get(variable), 0.75, na.rm = TRUE),
+            max = max(get(variable), na.rm = TRUE)
+        )%>% 
+        rename(!!by := 'get(by)')
+    
+    return(summary_table)
 }
 
 mmets_summaries <- list()
@@ -420,18 +453,6 @@ knitr::kable(
 )
 ```
 
-#### Age
-
-mMET hours per week by age backet -- there may be some non-linearity (e.g. 18-19 year olds median METS are lower, but perhaps not meaningfully so), but broadly, younger people have higher mMETs:
-
-```{r}
-#| label: visualise-age-distribution
-#| output: true
-ggplot(pa_data,aes(x=AGEB, y=mmet_hrs_wk_recreation)) + geom_boxplot() + coord_flip()
-qplot(x=pa_data$age_years,y=pa_data$mmet_hrs_wk_recreation, geom='smooth', span =0.5)
-```
-
-Looking at the qplot, to me it seems reasonable on grounds of parsimony to model the relationship between age and mMET hours/week as a linear function. There is a drop off after 70, however our data is relatively sparse beyond there and our last category does capture persons older than 85. Its easier to interpret the story from the qplot than boxplots too.
 
 #### Correlations
 
@@ -449,7 +470,7 @@ correlation_matrix <- cor(cor) %>% as.data.frame()
 correlation_matrix[order(correlation_matrix$mmet_hrs_wk_recreation),] %>% round(2)
 ```
 
-None of the variables in themselves are strongly associated with mMET hours/week. As indicated above, age in years has a negative association. Being female is similarly associated with lower mMET hours/week. Number of persons in household and being a student were not associated with mMETs and need not be included in the model. Employment, lower socio-economic deprivation, and higher degree of education had weak positive associations with mMET hours/week.
+None of the variables in themselves are strongly associated with mMET hours/week. Age is associated with lower mMET hours/week, as is being female (negative correlations). Associations with age may be slightly non-linear; a sensitivity analysis further below suggests that although mMET hours/week peaked in the 20-24 years age group not the youngest (18-19 years; n=33, the smallest sample and may not be representative), the trend is broadly monotonic and arguably approximately linear albeit with increasing rate of decline after age 70.  Number of persons in household and being a student were not associated with mMETs and need not be included in the model. Employment, lower socio-economic deprivation, and higher degree of education had weak positive associations with mMET hours/week.
 
 #### Clustering
 
@@ -471,14 +492,25 @@ Select relevant variables and only retain records with full data.
 ```{r}
 #| label: collate-modelling-data
 #| output: true
-pa_data =pa_data%>%
-  select(ABSPID, age_years, female, is_employed, education, irsd_sa1, mmet_hrs_wk_recreation, mmet_hrs_wk_recreation_zero)%>%
-  na.omit()
+pa_data =pa_data[
+    c('ABSPID', 'AGEB', 'age_years', 'female', 'is_employed', 'education', 'irsd_sa1','irsd_sa1_quintile_cat','mmet_hrs_wk_recreation', 'mmet_hrs_wk_recreation_zero')
+    ] %>% na.omit()
 
 pa_data %>% st(out='kable')
 ```
 
-Copy a subset of data for persons who record at least some mMET hours/week
+Now the full analytical sample has been determined, its worth noting the sample sizes for the default reference categories of the factor variables summarised above.  For age, the first category (default reference) is ages 18-19, for which there are only 33 individuals; this is further reduced to 19 after those with zero recorded recreational physical activity are excluded (below).  Comparisons with this category against all others will result in poor estimates lacking precision due to the small referrent group sample size (see Lash, Timothy L. et al., eds. Modern Epidemiology. 4th ed. Phil: Wolters Kluwer / Lippincott Williams & Wilkins, 2021. [p719](https://ebookcentral.proquest.com/lib/rmit/reader.action?docID=6947080&ppg=719)).  A better reference choice, if including age as categorical instead of continuous, would be persons aged 35-39 (n=856, or n=627 undertaking any recreational physical activity).  
+
+A similar issue is observed with education where 'low' only contains n=59 individuals, compared to 2103 (medium) and 3513 (high).  While the high category has the largest sample count in the NHS reference data, 'medium' is the most meaningful normative reference point and also the most common category in the synthetic population; so the reference for education should be set to 'medium'.
+
+The middle quintile '3' was already set as a reference category in the data set up stage, as the normative group.
+
+```{r}
+pa_data$AGEB <- relevel(pa_data$AGEB, ref = "35-39")
+pa_data$education <- relevel(pa_data$education, ref = "medium")
+```
+
+With intentional factor variable reference levels established, a subset of data for persons who record at least some mMET hours/week will be copied to a new dataframe.
 
 ```{r}
 #| label: collate-modelling-positive-mMETS-data
@@ -487,38 +519,325 @@ pa_data_over0=pa_data[pa_data$mmet_hrs_wk_recreation>0,]
 pa_data_over0 %>% st(out='kable')
 ```
 
+#### Synthetic population data set up
+The NHS survey provides age in brackets, while the synthetic population has continuous age as well as an age category variable.  The grouping of the latter are not explicitly named however, and if we were to use age groups it may be best to create a new group to specifically match the NHS brackets used in modelling.
+
+Let's have a look at the age brackets in the synthetic population first:
+```{r}
+#| label: pp-age
+#| output: true
+summary_stats_by(pp,'Age','age_cat') %>% print(n=Inf)
+``` 
+
+The age brackets don't match the NHS variable; as expected, we'll have to create a new age bracket variable.  
+
+```{r}
+age_breaks <- c(18, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, Inf)
+age_labels <- c("18-19", "20-24", "25-29", "30-34", "35-39", 
+                "40-44", "45-49", "50-54", "55-59", 
+                "60-64", "65-69", "70-74", "75-79", 
+                "80-84", "≥85")
+pp$AGEB <- cut(pp$Age, breaks = age_breaks, labels = age_labels, right = FALSE)
+pp$AGEB <- relevel(pp$AGEB, ref = "35-39")
+summary_stats_by(pp,'Age','AGEB') %>% print(n=Inf)
+```
+
+Great, so now there's an age bracket variable in the synthetic population that matches the NHS data breaks.
+
+We also want to set the reference levels for other variables to match those in the NHS drawn physical activity data.
+
+```{r}
+pp$education <- factor(pp$education)
+pp$education <- relevel(pp$education, ref = "medium")
+```
+
+There are some remaining variables to derive in order to get our synthetic population data into the equivalent format to our model, e.g. by converting string categorical variables to binary indicators and adapting the SEIFA IRSD to quintiles. Then we can use our predictions and apply them to the synthetic population.
+
+```{r}
+#| label: prepare-synthetic-population-prediction
+#| output: true
+# Perform the transformations
+pp[, `:=`(
+    irsd_sa1 = fifelse(IRSAD %in% c(1, 2), 1,
+                fifelse(IRSAD %in% c(3, 4), 2,
+                fifelse(IRSAD %in% c(5, 6), 3,
+                fifelse(IRSAD %in% c(7, 8), 4,
+                fifelse(IRSAD %in% c(9, 10), 5, NA_real_))))),
+    age_years = Age,
+    female = fifelse(Gender == "Female", 1, 0),
+    is_employed = fifelse(is_employed == "Yes", 1, 0)
+)]
+
+pp$irsd_sa1_quintile_cat = factor(
+        pp$irsd_sa1, 
+        levels = 1:5, 
+        labels = c("1 (most deprived)", "2", "3 (reference)", "4", "5 (least deprived)")
+    )
+pp$irsd_sa1_quintile_cat = relevel(pp$irsd_sa1_quintile_cat, ref = "3 (reference)")
+
+# Select the relevant columns
+data <- pp[Age >= 18, .(AgentId, age_years, AGEB, female, is_employed, education, irsd_sa1, irsd_sa1_quintile_cat)] 
+data %>% st(out='kable')
+```
+
 ### Modelling
 
 The modelling approach (and earlier data preparation) draws on code from the Manchester physical activity modelling R code file `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi and Marina Berdokhova.
 
-#### Modelling mMETS hours/week
+Age as categorical does not display any clear trend, whereas there is a strong association for age when modelled as a continuous variable.  Because the purpose of this model is prediction and not inference, the use of age brackets may be justified to account for the slight non-linearity observed when making predictions for the synthetic population.  This implications of this decision will be explored further in subsequent sensitivity analysis.
+
+A negative binomial model was used to model the recreational physical activity data for those who recorded mMET hours/week as it was found to provide a better prediction for the skewed data than a linear model.  Modelling options supporting this decision are explored in a sensitivity analysis further below.
 
 ```{r}
-#| label: model-total-mMETs
-#| output: true
+# initialise model list
 m.mMETs_recreational <- list()
-
-m.mMETs_recreational$linear <- lm(
-    mmet_hrs_wk_recreation ~ female+age_years+is_employed+education+irsd_sa1,
-    data = pa_data_over0)
-summary(m.mMETs_recreational$linear)
 ```
 
-In this model, most predicted results were slightly under-estimated compared with the observed values (median -5.6 mMET hours/week; IQR -11.7 to 6.3).
-
-#### Modelling zero mMETS hours/week
-
 ```{r}
-#| label: model-total-mMETS-zero
+#| label: model-recreation-mMETS-zero
 #| output: true
+
+# Logistic regression model of zero mMETS hours/week
 m.mMETs_recreational$zeroModel <- glm(
-    mmet_hrs_wk_recreation_zero ~ female+age_years+is_employed+education+irsd_sa1,
+    mmet_hrs_wk_recreation_zero ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
     family = "binomial",
     data = pa_data
 )
 
-summary(m.mMETs_recreational$zeroModel)
+summ(m.mMETs_recreational$zeroModel, confint = TRUE, digits = 3)
 ```
+
+```{r}
+#| label: model-recreation-mMETS
+#| output: true
+
+# Negative binomial model for amount of mMET hours/week physical activity
+m.mMETs_recreational$neg_binom_over0 <- glm.nb(
+    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    data = pa_data_over0
+)
+
+summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
+```
+
+### Evaluating model fit
+
+#### Binary predictions of any recreational physical activity being undertaken.
+
+```{r}
+#| label: zero_model_confusion_matrix
+#| output: true
+
+predicted_probabilities <- predict(m.mMETs_recreational$zeroModel, type = "response")
+predicted_binary <- ifelse(predicted_probabilities > 0.5, 1, 0)
+observed_binary <- pa_data$mmet_hrs_wk_recreation_zero
+confusion_matrix <- table(Predicted = predicted_binary, Observed = observed_binary)
+print(confusion_matrix)
+```
+
+#### Combined-model predictions
+
+Predictions of amount of physical activity.
+
+```{r}
+#| label: review_combined_predictions
+#| output: true
+nonzero_predictions <- predict(
+    m.mMETs_recreational$neg_binom_over0, 
+    type = "response", 
+    newdata = pa_data)
+combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
+
+# Evaluate the model
+observed_values <- pa_data$mmet_hrs_wk_recreation
+results <- data.frame(
+    observed_values = observed_values,
+    combined_predictions = combined_predictions
+)
+ggplot(results, aes(x = observed_values, y = combined_predictions)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+    labs(
+        title = "Scatter Plot of Observed vs. Predicted mMET Hours/Week",
+        x = "Observed mMET Hours/Week",
+        y = "Predicted mMET Hours/Week"
+    ) +
+    theme_minimal()
+```
+
+
+
+
+Lets look at effects from the main predictive model for amount of mMET hours/week:
+```{r}
+#| label: effects-plots
+#| output: true
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = AGEB, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = female, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+            
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = education, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+            
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = is_employed, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+            
+effect_plot(
+    m.mMETs_recreational$neg_binom_over0, pred = irsd_sa1_quintile_cat, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+```
+
+
+### Prediction of mMET hours/week for synthetic population
+
+```{r}
+#| label: montecarlo-prediction-function
+MonteCarlo <- function(model, data,facetVar = NA) {
+  probability.matrix <- as.vector(predict(model,data,type = "response"))
+  MC.prediction <- rep(NA,nrow(data))
+  for(n in c(1:nrow(data))) {
+    MC.prediction[n] <- runif(1)<=probability.matrix[n]
+  }
+  data=data%>%mutate(zeroPrediction=MC.prediction)
+  return(data)
+}
+```
+
+#### Prediction of adults undertaking any recreational physical activity
+```{r}
+#| label: predict-synpop-mMETs
+#| output: true
+mmets_prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
+table(mmets_prediction$zeroPrediction)
+```
+
+#### Prediction of amount of recreational physical activity
+
+```{r}
+#| label: synpop-prediction-outputs
+#| output: true
+setDT(mmets_prediction)
+
+mmets_prediction[, mMETs_recreational := ifelse(
+  zeroPrediction == FALSE,
+  predict(m.mMETs_recreational$neg_binom_over0, .SD, type = "response"),
+  0
+)]
+```
+#### Join estimates to synthetic population
+
+```{r}
+synpop[mmets_prediction,on='AgentId',mMETs_recreational := i.mMETs_recreational]
+summary(synpop$mMETs_recreational)
+ggplot(synpop)+stat_ecdf(aes(x=mMETs_recreational))
+```
+
+```{r}
+#| label: save-predicted-mMETS-synpop
+#| output: true
+fwrite(synpop,"pp_health_2021_mMETS_recreational.csv")
+```
+
+```{r}
+#| label: boxplot-mMETs_recreational
+#| output: true
+
+# Layout to split the screen
+layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(1,8))
+ 
+# Draw the boxplot and the histogram 
+par(mar=c(0, 3.1, 1.1, 2.1))
+boxplot(synpop$mMETs_recreational, horizontal=TRUE , ylim=c(0,30), xaxt="n" , col=rgb(0.8,0.8,0,0.5) , frame=F)
+par(mar=c(4, 3.1, 1.1, 2.1))
+hist(synpop$mMETs_recreational, breaks=40 , col=rgb(0.2,0.8,0.5,0.5) , border=F , main="" , xlab="Predicted mMET hours/week", xlim=c(0,30))
+```
+
+#### Combined comparison
+
+```{r}
+#| label: overall-mMETs-comparison
+#| output: true
+desc <- "Synthetic population (recreation)"
+var <- 'mMETs_recreational'
+mmets_comparison <- rbind(
+    mmets_comparison,
+    cbind(
+        summary=desc, 
+        sex="Men",
+        summary_stats(synpop %>% filter(Gender=='Male'),var)
+    ),
+    cbind(
+        summary=desc, 
+        sex="Women",
+        summary_stats(synpop %>% filter(Gender=='Female'),var)
+    ),
+    cbind(
+        summary=desc, 
+        sex="Overall",
+        summary_stats(synpop,var)
+    )
+)
+
+options(knitr.kable.NA = '-')
+knitr::kable(
+    mmets_comparison,
+    caption = "Marginal MET hours per week",
+    digits=2
+)
+
+```
+
+Comparing the meta-analysis estimates for gender-stratified physical activity mMET hours/week to those in the Australian NHS data, the latter has broadly similar if slightly lower estimates overall; approximately 4 mMET-hours/week lower (albeit, with substantial variation).  Conversely, the maximum recorded mMET/hours were higher in the NHS data than in the meta-analysis.  While gender-specific trends were broadly similar (women on average recording lower mMET hours/week in both the meta-analysis and NHS total and recreation estimates), the maximum mMET hours/week for women was higher for women in the Australian NHS sample.  It is worth noting the limitation of the Australian NHS data that it is national and not restricted to an urban population; this could be an important difference, if cohort studies tend to have an urban focus. 
+
+The modelled estimates for recreational mMET hours/week were similar on average to the NHS data from which they were based (similar means by sex and overall).  As the estimates were based on modelled averages, the reduced variability by sex and overall is not surprising.  The median (and 75th percentile, to a lesser degree) of the synthetic population estimates were substantially higher than the NHS data they were modelled from.  This may relate to demographic differences with the synthetic population reflecting demographics of an urban population in Melbourne, compared with the NHS data's national population.  Likely it also reflects aspects of the modelling approach: the hurdle design's binomial model appears to effectively model the propensity to undertake any recreational physical activity (i.e. the zeros) but the modelling of mMET hours/week may otherwise approximate a normal distribution.  This was the case regardless of using a linear model (as currently used, for comparability with the Manchester approach) or a negative binomial model (which resulted in similar if slightly reduced estimates, approximately 1 mMET hour/week lower).  Given the similarity, the simpler model may be preferred, and hence was ultimately used despite the earlier exploratory analysis.  
+
+The resulting synthetic population estimates for mMET hours/week arguably make sense as these are estimates based on average effects given demographic covariates, not true results for individuals.  They are by definition, according to the methods used, normative. Therefore it is not suprising the long tail of maximum mMET hours in the meta-analysis and NHS survey data is truncated to approximately 20 mMET hours/week.  Despite not representing the full and skewed distribution of mMET hours/week that would be expected in the population, if the purpose of the synthetic population is for inference on average effects for the basic range of included covariates, these estimates should be adequate for usage as exposures in the health modelling.
+
+
+## Sensitivity analysis
+
+### Age as categorical or continuous
+
+Age appears to be only mildly non-linear, and basically appears associated with a monotonic reduction in mMET hours/week as one ages, with a steeper rate of decline beyond age 70.  However, in a model there could be advantages for approximating this as a linear process; were it to matter (it doesn't for this use case, because the aim is not inference) there would be more statistical power modelling it as a continuous rather than categorical process.  Categorical variables can also risk overfitting to noisy processes in the sample data.  Let's explore the influence of the choice.
+
+There may be some non-linearity (e.g. 18-19 year olds median METS are lower, but perhaps not meaningfully so), but broadly, younger people have higher mMETs:
+
+```{r}
+#| label: visualise-age-distribution
+#| output: true
+ggplot(pa_data,aes(x=AGEB, y=mmet_hrs_wk_recreation)) + geom_boxplot() + coord_flip()
+qplot(x=pa_data$age_years,y=pa_data$mmet_hrs_wk_recreation, geom='smooth', span =0.5)
+```
+
+Looking at the qplot, to me it seems reasonable on grounds of parsimony to model the relationship between age and mMET hours/week as a linear function. There is a drop off after 70, however our data is relatively sparse beyond there and our last category does capture persons older than 85. Its easier to interpret the story from the qplot than boxplots too.
+
+On the other hand, because the purpose of this model is for prediction rather than inference, maybe it would make sense to leave as a categorical variable.  This would match the approach taken for Manchester, using age as a factor variable to account for non-linearity.
+
+```{r}
+m.mMETs_recreational$neg_binom_over0_years <- glm.nb(
+    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1_quintile_cat,
+    data = pa_data_over0
+)
+
+summ(m.mMETs_recreational$neg_binom_over0_years, confint = TRUE, digits = 3)
+summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
+
+anova(m.mMETs_recreational$neg_binom_over0, m.mMETs_recreational$neg_binom_over0_years, test='LRT')
+```
+
+The model with years as continuous is easier to understand at a glance; it arguably more clearly indicates that there is an approximately linear negative association between age and recreational physical activity amount.
+
+However, the difference in AIC is negligible and slightly lower for the model with age as a categorical variable.  Statistically, the likelihood ratio test also suggests the model with age as a categorical variable is the preferred model.  The latter was ultimately used in the main analysis.
+
+### Hurdle model
+
+A hurdle model is a natural choice for rate data like marginal MET hours/week for recreation, because it can describe two distinct data generating processes: individuals' undertaking of any recorded recreational physical activity, and mMET hours/week for those who undertake any. In the context of physical activity data, many individuals may report zero physical activity, while others report varying positive amounts. The hurdle model first models the probability of a zero versus a non-zero outcome using a binomial model, and then models the positive counts separately using a truncated count model (e.g., Poisson or Negative Binomial). This approach can allow for more accurate modeling of the data distribution when there is an excess of zeros and overdispersion in the positive counts, which is common in physical activity data.
+
 
 Considering the non-normal nature of mMET hours/week, which is a positively skewed rate variable (a non-negative count of hours per week), it is worth considering whether a Poisson model might be more appropriate and provide a better fit.
 
@@ -540,165 +859,47 @@ if (var_mmet > 2 * mean_mmet) {
 
 The model may appear appoximately normally distributed on a log scale, it also has considerably over-dispersion so a negative binomial model may be appropriate, potentially accounting for the large number of zeros.
 
-```{r}
-#| label: consider_alternate_models
-#| output: true
-library(MASS)
-library(pscl)
+The various modelling choices are evaluated below to understand their implications on predictions.
 
-m.mMETs_recreational$neg_binom <- glm.nb(
-    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1,
-    data = pa_data
+#### Linear, Poisson, or negative binomial?
+
+```{r}
+#| label: model-recreation-mMETS-comparison
+#| output: true
+
+library(pscl) # for zero-inflated model
+m.mMETs_recreational$linear <- lm(
+    mmet_hrs_wk_recreation ~ female + AGEB + is_employed+education + irsd_sa1_quintile_cat,
+    data = pa_data_over0)
+
+m.mMETs_recreational$poisson <- glm(
+    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    family = "poisson",
+    data = pa_data_over0
 )
 
-summary(m.mMETs_recreational$neg_binom)
-
-# Zero-Inflated Negative Binomial model
-pa_data$mmet_hrs_wk_recreation_round <- round(pa_data$mmet_hrs_wk_recreation)
-
+# zero-inflated model uses the full data as an alternative to the hurdle model
 m.mMETs_recreational$zinb <- zeroinfl(
-    mmet_hrs_wk_recreation_round ~ female + age_years + is_employed + education + irsd_sa1 | female + age_years + is_employed + education + irsd_sa1,
+    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat | female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
     data = pa_data,
     dist = "negbin"
 )
 
-# Summary of the Zero-Inflated Negative Binomial model
-summary(m.mMETs_recreational$zinb)
-```
-
-```{r}
-#| label: review_models
-#| output: true
-# Compare AIC values
 aic_values <- data.frame(
-    Model = c("Linear", "Binomial", "neg_binom", "zinb"),
+    Model = c("Linear", "Poisson", "Negative binomial", "Zero-inflated negative binomial"),
     AIC = c(
         AIC(m.mMETs_recreational$linear), 
-        AIC(m.mMETs_recreational$zeroModel), 
-        AIC(m.mMETs_recreational$neg_binom),
+        AIC(m.mMETs_recreational$poisson), 
+        AIC(m.mMETs_recreational$neg_binom_over0),
         AIC(m.mMETs_recreational$zinb)
     )
 )
 print(aic_values)
 ```
 
-### Predictions
+The negative binomial hurdle model appears to be the best model, and so was ultimately used in the main analysis.
 
-```{r}
-#| label: montecarlo-prediction-function
-MonteCarlo <- function(model, data,facetVar = NA) {
-  probability.matrix <- as.vector(predict(model,data,type = "response"))
-  MC.prediction <- rep(NA,nrow(data))
-  for(n in c(1:nrow(data))) {
-    MC.prediction[n] <- runif(1)<=probability.matrix[n]
-  }
-  data=data%>%mutate(zeroPrediction=MC.prediction)
-  return(data)
-}
-```
-
-```{r}
-#| label: predict-total-mMETs-nhs
-#| output: true
-predicted_mmet <- predict(m.mMETs_recreational$zinb, type = "response")
-predicted_binary <- ifelse(predicted_mmet > 0, 1, 0)
-actual_binary <- ifelse(pa_data$mmet_hrs_wk_recreation > 0, 1, 0)
-confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
-print(confusion_matrix)
-
-results <- data.frame(
-    predicted_mmet = predicted_mmet,
-    actual_binary = pa_data$actual_binary <- ifelse(pa_data$mmet_hrs_wk_recreation > 0, "Greater than 0", "0")
-)
-# Generate box plots
-ggplot(results, aes(x = actual_binary, y = predicted_mmet)) +
-    geom_boxplot() +
-    labs(
-        title = "Predicted mMET Hours/Week by Actual mMET Hours/Week > 0 Status",
-        x = "Actual mMET Hours/Week > 0 Status",
-        y = "Predicted mMET Hours/Week"
-    ) +
-    theme_minimal()
-```
-
-While the model overestimates mMET hours for those who were estimated to have accrued none, those with none predicted were significantly lower which may be a more realistic estimate. (i.e. in the real world, it may be unlikely that zero physical activity is conducted, some physical activity does occur incidentally as a result of being alive, so the over-estimation of the 'zero' observed mMET hours/week may not be such a problem, necessarily).
-
-But ... the original zero model still did by far the best at predicting zeros, perhaps using the zero model with negative binomial regression for the over zeros would be the best model.
-
-```{r}
-#| label: negative_binomial_model_over0
-#| output: true
-m.mMETs_recreational$neg_binom_over0 <- glm.nb(
-    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1,
-    data = pa_data_over0
-)
-
-summary(m.mMETs_recreational$neg_binom_over0)
-
-# Compare AIC values
-aic_values <- data.frame(
-    Model = c("Linear", "Binomial", "neg_binom", "zinb","neg_binom_over0"),
-    AIC = c(
-        AIC(m.mMETs_recreational$linear), 
-        AIC(m.mMETs_recreational$zeroModel), 
-        AIC(m.mMETs_recreational$neg_binom),
-        AIC(m.mMETs_recreational$zinb),
-        AIC(m.mMETs_recreational$neg_binom_over0)
-    )
-)
-print(aic_values)
-```
-
-The combination of negative binomial model with the zero model appears to outperform the linear model.
-
-```{r}
-#| label: zero_model_confusion_matrix
-#| output: true
-
-# Make predictions using the zero model
-predicted_probabilities <- predict(m.mMETs_recreational$zeroModel, type = "response")
-
-# Convert predicted probabilities to binary outcomes using a threshold of 0.5
-predicted_binary <- ifelse(predicted_probabilities > 0.5, 1, 0)
-
-# Actual binary outcomes
-actual_binary <- pa_data$mmet_hrs_wk_recreation_zero
-
-# Generate the confusion matrix
-confusion_matrix <- table(Predicted = predicted_binary, Actual = actual_binary)
-print(confusion_matrix)
-```
-
-Review the combined predictions
-
-```{r}
-#| label: review_combined_predictions
-#| output: true
-nonzero_predictions <- predict(
-    m.mMETs_recreational$neg_binom_over0, 
-    type = "response", 
-    newdata = pa_data)
-combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
-
-# Evaluate the model
-actual_values <- pa_data$mmet_hrs_wk_recreation
-results <- data.frame(
-    actual_values = actual_values,
-    combined_predictions = combined_predictions
-)
-ggplot(results, aes(x = actual_values, y = combined_predictions)) +
-    geom_point(alpha = 0.5) +
-    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-    labs(
-        title = "Scatter Plot of Actual vs. Predicted mMET Hours/Week",
-        x = "Actual mMET Hours/Week",
-        y = "Predicted mMET Hours/Week"
-    ) +
-    theme_minimal()
-```
-
-Save the model outputs for usage later
-
+## Save output models
 ```{r}
 #| label: save-model-outputs
 #| output: true
@@ -706,129 +907,6 @@ Save the model outputs for usage later
 today_date <- format(Sys.Date(), "%d%m%Y")
 
 # Save the RDS file with today's date in the filename
-saveRDS(m.mMETs_recreational, paste0("model_total_mMETs_", today_date, ".rds"))
+saveRDS(m.mMETs_recreational, paste0("model_recreational_mMETs_", today_date, ".rds"))
 ```
 
-#### Predicting mMET hours/week for synthetic population
-
-Now we need to get our synthetic population data into the equivalent format to our model, e.g. by converting string categorical variables to binary indicators and adapting the SEIFA IRSD to quintiles. Then we can use our predictions and apply them to the synthetic population.
-
-```{r}
-#| label: prepare-synthetic-population-prediction
-#| output: true
-# Perform the transformations
-pp[, `:=`(
-    irsd_sa1 = fifelse(IRSAD %in% c(1, 2), 1,
-                fifelse(IRSAD %in% c(3, 4), 2,
-                fifelse(IRSAD %in% c(5, 6), 3,
-                fifelse(IRSAD %in% c(7, 8), 4,
-                fifelse(IRSAD %in% c(9, 10), 5, NA_real_))))),
-    age_years = Age,
-    female = fifelse(Gender == "Female", 1, 0),
-    is_employed = fifelse(is_employed == "Yes", 1, 0),
-    education = fifelse(education == 'high', 2,
-                fifelse(education == 'medium', 1,
-                fifelse(education == 'low', 0, NA_real_)))
-)]
-
-# Convert education to a factor
-pp[, education := factor(education, levels = 0:2, labels = c('low', 'medium', 'high'), ordered = FALSE)]
-
-# Select the relevant columns
-data <- pp[, .(AgentId, age_years, female, is_employed, education, irsd_sa1)]
-  
-
-data %>% st(out='kable')
-```
-
-#### Prediction of mMET hours/week for synethic population
-
-```{r}
-#| label: predict-synpop-mMETs
-#| output: true
-prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
-table(prediction$zeroPrediction)
-```
-
-#### Join estimates back onto synthetic population
-
-```{r}
-#| label: synpop-prediction-outputs
-#| output: true
-nonzeroPP <- prediction %>% filter(!zeroPrediction)
-
-nonzeroPP_predict <- nonzeroPP %>% mutate(
-    mMETs_recreational = predict(m.mMETs_recreational$linear, nonzeroPP)
-)
-
-pp <- pp %>% 
-      left_join(
-        nonzeroPP_predict %>% dplyr::select('AgentId','mMETs_recreational')
-      )
-pp <- pp %>% mutate(
-    mMETs_recreational = ifelse(is.na(mMETs_recreational), 0, mMETs_recreational)
-)
-summary(pp$mMETs_recreational)
-ggplot(pp)+stat_ecdf(aes(x=mMETs_recreational))
-```
-
-```{r}
-#| label: save-predicted-mMETS-synpop
-#| output: true
-fwrite(pp,"pp_health_2021_mMETS_recreational.csv")
-```
-
-```{r}
-#| label: boxplot-mMETs_recreational
-#| output: true
-
-# Layout to split the screen
-layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(1,8))
- 
-# Draw the boxplot and the histogram 
-par(mar=c(0, 3.1, 1.1, 2.1))
-boxplot(pp$mMETs_recreational, horizontal=TRUE , ylim=c(0,30), xaxt="n" , col=rgb(0.8,0.8,0,0.5) , frame=F)
-par(mar=c(4, 3.1, 1.1, 2.1))
-hist(pp$mMETs_recreational, breaks=40 , col=rgb(0.2,0.8,0.5,0.5) , border=F , main="" , xlab="Predicted mMET hours/week", xlim=c(0,30))
-```
-
-#### Combined comparison
-
-```{r}
-#| label: overall-mMETs-comparison
-#| output: true
-desc <- "Synthetic population (recreation)"
-var <- 'mMETs_recreational'
-mmets_comparison <- rbind(
-    mmets_comparison,
-    cbind(
-        summary=desc, 
-        sex="Men",
-        summary_stats(pp %>% filter(Gender=='Male'),var)
-    ),
-    cbind(
-        summary=desc, 
-        sex="Women",
-        summary_stats(pp %>% filter(Gender=='Female'),var)
-    ),
-    cbind(
-        summary=desc, 
-        sex="Overall",
-        summary_stats(pp,var)
-    )
-)
-
-options(knitr.kable.NA = '-')
-knitr::kable(
-    mmets_comparison,
-    caption = "Marginal MET hours per week",
-    digits=2
-)
-
-```
-
-Comparing the meta-analysis estimates for gender-stratified physical activity mMET hours/week to those in the Australian NHS data, the latter has broadly similar if slightly lower estimates overall; approximately 4 mMET-hours/week lower (albeit, with substantial variation).  Conversely, the maximum recorded mMET/hours were higher in the NHS data than in the meta-analysis.  While gender-specific trends were broadly similar (women on average recording lower mMET hours/week in both the meta-analysis and NHS total and recreation estimates), the maximum mMET hours/week for women was higher for women in the Australian NHS sample.  It is worth noting the limitation of the Australian NHS data that it is national and not restricted to an urban population; this could be an important difference, if cohort studies tend to have an urban focus. 
-
-The modelled estimates for recreational mMET hours/week were similar on average to the NHS data from which they were based (similar means by sex and overall).  As the estimates were based on modelled averages, the reduced variability by sex and overall is not surprising.  The median (and 75th percentile, to a lesser degree) of the synthetic population estimates were substantially higher than the NHS data they were modelled from.  This may relate to demographic differences with the synthetic population reflecting demographics of an urban population in Melbourne, compared with the NHS data's national population.  Likely it also reflects aspects of the modelling approach: the hurdle design's binomial model appears to effectively model the propensity to undertake any recreational physical activity (i.e. the zeros) but the modelling of mMET hours/week may otherwise approximate a normal distribution.  This was the case regardless of using a linear model (as currently used, for comparability with the Manchester approach) or a negative binomial model (which resulted in similar if slightly reduced estimates, approximately 1 mMET hour/week lower).  Given the similarity, the simpler model may be preferred, and hence was ultimately used despite the earlier exploratory analysis.  
-
-The resulting synthetic population estimates for mMET hours/week arguably make sense as these are estimates based on average effects given demographic covariates, not true results for individuals.  They are by definition, according to the methods used, normative. Therefore it is not suprising the long tail of maximum mMET hours in the meta-analysis and NHS survey data is truncated to approximately 20 mMET hours/week.  Despite not representing the full and skewed distribution of mMET hours/week that would be expected in the population, if the purpose of the synthetic population is for inference on average effects for the basic range of included covariates, these estimates should be adequate for usage as exposures in the health modelling.
