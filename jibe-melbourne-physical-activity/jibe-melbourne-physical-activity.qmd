@@ -11,7 +11,7 @@ knitr:
 
 This Quarto markdown document is intended to contain code to predict physical activity for sport and recreation including walking and cycling, given explanatory variables (age, sex, SES, education, has car, etc) that align with the JIBE synthetic population data. This will be conducted to predict physical activity for residents of Melbourne, Australia, using the Australian Bureau of Statistics Australian National Health Survey data (2017-18).
 
-The analysis draws on Belen Zapata-Diomedi's code for cleaning the NHS dataset (../document.qmd), and Belen Zapata-Diomedi, Qin Zhang and Marina Berdokhova's code for a predictive model of marginal metabolic equivalent hours per week (mMET house/week) for Manchester, UK.
+The analysis draws on Belen Zapata-Diomedi's code for cleaning the NHS dataset (../document.qmd), and Belen Zapata-Diomedi, Qin Zhang and Marina Berdikhanova's code for a predictive model of marginal metabolic equivalent hours per week (mMET house/week) for Manchester, UK.
 
 To allow this code to be run on different computers and operating systems easily, rather than hardcode data paths for inputs there is a file chooser for the three key inputs used:
 
@@ -582,11 +582,13 @@ data %>% st(out='kable')
 
 ### Modelling
 
-The modelling approach (and earlier data preparation) draws on code from the Manchester physical activity modelling R code file `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi and Marina Berdokhova.
+The modelling approach (and earlier data preparation) draws on code from the Manchester physical activity modelling R code file `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi and Marina Berdikhanova.
 
 Age as categorical does not display any clear trend, whereas there is a strong association for age when modelled as a continuous variable.  Because the purpose of this model is prediction and not inference, the use of age brackets may be justified to account for the slight non-linearity observed when making predictions for the synthetic population.  This implications of this decision will be explored further in subsequent sensitivity analysis.
 
 A negative binomial model was used to model the recreational physical activity data for those who recorded mMET hours/week as it was found to provide a better prediction for the skewed data than a linear model.  Modelling options supporting this decision are explored in a sensitivity analysis further below.
+
+Note that negative binomial regression results are expressed as log(rate) --- meaning they need to be exponentiated to be interpreted as mMET hours/week.  That is done when making predictions for the response variable.  
 
 ```{r}
 # initialise model list

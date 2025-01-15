@@ -11,7 +11,7 @@ Health Survey data (2017-18).
 
 The analysis draws on Belen Zapata-Diomedi’s code for cleaning the NHS
 dataset (../document.qmd), and Belen Zapata-Diomedi, Qin Zhang and
-Marina Berdokhova’s code for a predictive model of marginal metabolic
+Marina Berdikhanova’s code for a predictive model of marginal metabolic
 equivalent hours per week (mMET house/week) for Manchester, UK.
 
 To allow this code to be run on different computers and operating
@@ -996,7 +996,7 @@ Summary Statistics
 The modelling approach (and earlier data preparation) draws on code from
 the Manchester physical activity modelling R code file
 `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi
-and Marina Berdokhova.
+and Marina Berdikhanova.
 
 Age as categorical does not display any clear trend, whereas there is a
 strong association for age when modelled as a continuous variable.
@@ -1011,6 +1011,11 @@ activity data for those who recorded mMET hours/week as it was found to
 provide a better prediction for the skewed data than a linear model.
 Modelling options supporting this decision are explored in a sensitivity
 analysis further below.
+
+Note that negative binomial regression results are expressed as
+log(rate) — meaning they need to be exponentiated to be interpreted as
+mMET hours/week. That is done when making predictions for the response
+variable.
 
 ``` r
 # initialise model list
@@ -1247,7 +1252,7 @@ mmets_prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
 table(mmets_prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 2109167 1084646
+## 2107479 1086334
 ```
 
 #### Prediction of amount of recreational physical activity
@@ -1331,8 +1336,8 @@ knitr::kable(
 | NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 4.00 | 12.00 | 182.00 |
 | NHS (recreation) | Overall | 16359 | 10.05 | 15.49 | 0 | 0.00 | 4.00 | 14.00 | 182.00 |
 | Synthetic population (recreation) | Men | 1542991 | 11.88 | 8.72 | 0 | 0.00 | 16.10 | 18.47 | 31.00 |
-| Synthetic population (recreation) | Women | 1650822 | 9.13 | 6.87 | 0 | 0.00 | 12.55 | 14.54 | 24.17 |
-| Synthetic population (recreation) | Overall | 3193813 | 10.46 | 7.94 | 0 | 0.00 | 13.56 | 16.78 | 31.00 |
+| Synthetic population (recreation) | Women | 1650822 | 9.12 | 6.87 | 0 | 0.00 | 12.55 | 14.54 | 24.17 |
+| Synthetic population (recreation) | Overall | 3193813 | 10.45 | 7.94 | 0 | 0.00 | 13.56 | 16.78 | 31.00 |
 
 Marginal MET hours per week
 
