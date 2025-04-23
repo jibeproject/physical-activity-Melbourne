@@ -9,9 +9,13 @@ knitr:
     collapse: true
 ---
 
-This Quarto markdown document is intended to contain code to predict physical activity for sport and recreation including walking and cycling, given explanatory variables (age, sex, SES, education, has car, etc) that align with the JIBE synthetic population data. This will be conducted to predict physical activity for residents of Melbourne, Australia, using the Australian Bureau of Statistics Australian National Health Survey data (2017-18).
+This Quarto markdown document is intended to contain code to predict physical activity for sport and recreation including walking and cycling, given explanatory variables (age, sex, employment and student status, and socio-economic status, etc) that align with the JIBE synthetic population data. This will be conducted to predict physical activity for residents of Melbourne, Australia, using the Australian Bureau of Statistics Australian National Health Survey data (2017-18).
 
 The analysis draws on Belen Zapata-Diomedi's code for cleaning the NHS dataset (../document.qmd), and Belen Zapata-Diomedi, Qin Zhang and Marina Berdikhanova's code for a predictive model of marginal metabolic equivalent hours per week (mMET house/week) for Manchester, UK.
+
+For comparability with the Manhcester model in the JIBE workflow, we may wish to more or less closely mirror the variables used in the physical activity model, as detailed in the Manchester coefficients file, `sportPAmodel.csv`.  This contains a binary gender indicator (`female`), an age group factor variable (<25, 25-34, 35-44, 45-54, 55-64, 65-74, 75+), work status (retired, student or unemployed), and relative socio-economic disadvantage (UK Index of Multiple Deprivation; `imd10`).
+
+## Usage
 
 To allow this code to be run on different computers and operating systems easily, rather than hardcode data paths for inputs there is a file chooser for the three key inputs used:
 
@@ -88,13 +92,13 @@ Person-level variables of interest (see data dictionaries for detailed codes) in
 | AGEB                       | Age of person                           | 1== 0-4 years  … 19 == 85 years+                                                                                                                        |
 | SEX                        | Sex of person                           | 1==Male, 2==Female                                                                                                                                      |
 | LFSBC                      | Labour force status                     | 0==NA, 1==Employed, 2==Unemployed, 3==Not in the labour force                                                                                           |
-| HYSCHCBC                   | Highest year of school completed        | 0==NA, 1==Postgraduate, ... 13==Never attended school                                                                                                   |
-| HIGHLVLBC                  | Level of highest educational attainment | 0==NA, 1==Postgraduate, ... 13==Never attended school                                                                                                   |
 | EMPSTAT                    | Labour force full-time/part-time status | 0==NA, 1==Employed full time ... 6 Not in labour force                                                                                                  |
+| STDYFTPT                   | Whether currently studying full-time or part-time | 0. Not applicable, 1. Studying full-time, 2. Studying part-time, 3. Not studying |
 | Walk for recreation (mins) | EXFSRMIN                                | Total minutes walked for fitness, recreation or sport in last week (for at least 10 minutes)                                                            |
 | Walk for transport (mins)  | EXTRAMIN                                | Total minutes spent walking for transport in last week (for at least 10 minutes)                                                                        |
 | Moderate exercise (mins)   | EXLWMMIN                                | Total minutes undertaken moderate exercise last week (for example, a light jog, strenght and toning exercises, lifting small boxes and sweeping)        |
 | Vigorous exercise (mins)   | EXLWVMIN                                | Total minutes undertaken vigorous exercise last week (for example, playing basketball, running, lifting heavy boxes, and strength and toning exercises) |
+
 
 ## Methods
 
@@ -132,8 +136,6 @@ nhs <- dplyr::left_join(
                         "SEX",
                         "LFSBC",
                         "STDYFTPT",
-                        "HYSCHCBC",
-                        "HIGHLVBC",
                         "EXFSRMIN",
                         "EXTRAMIN",
                         "EXLWMMIN",
@@ -168,30 +170,23 @@ synpop %>% st(out='kable')
 pp <- data.table(synpop)
 ```
 
-Considering the above, I think the following points are worth considering as model refinements:
+Considering the above, including the Manchester model specifications with which we want comparability, we will represent varaibles as follow:
 
--   Represent age in years (e.g. using bracket mid-point) as "Age". This would better model age as a continuous variable, for direct prediction using the synthetic population. A caveat to that would be consideration of whether age is better modelled as linearly (a more parsimonious approach) or non-linearly (which its current treatment as a factor variable allows for, but complicates things and doesn't directly translate to the synthetic population variable that is continuous age in years).
-    -   on the other hand, there is an `age_cat` variable, however I think the model would have more power if age could be modelled as continuous. Having said that it will be good to consult with Belen and Qin to get their recommendations and plans for usage.
--   Represent sex as a binary indicator 'female' having 0 (male) and 1 (female)
--   Simplify employment as a binary variable "is_employed" with values of 0 (no) and 1 (yes).
--   Simplify education as a three level variable education, having values 'low', 'medium', 'high'. While it might be that this could be represented as a pseudo continuous variable (0, 1, 2), I think its best to not assume its linear and leave it as a categorical factor variable. Break points for low, medium and high may be subjective; need to consult what this represent in synthetic population. For now, have assumed any tertiary education (Bachelor and higher) is high; Year 10, 11, 12, and Certificates higher than III are medium; and certificates I/II, or Year 9 or lower is low.
--   There is a variable 'IRSAD' that might be disadvantage but it ranges from -1 to 11, so is not clear what this represents (not simply deciles, and not quintiles)
--   other considerations:
-    -   The synthetic population seems to have 'student' as a category in RelationshipStatus -- if that does identify someone as a student, then perhaps we can consider 'is_student' in the model for mMETs.
-    -   hhSize is present in synthetic population. It may not be conceptually relevant, but is present in household data for NHS, so we could consider its appropriateness for the model.
-    -   hhCar is in synethic population, but there is no data to represent this in the NHS data, that I can see.
+- sex as a binary indicator 'female' having 0 (male) and 1 (female)
+- age using an age group factor variable with decade breaks to match those used for Manchester
+- employment as a binary variable "employed" with values of 0 (no) and 1 (yes).
+- student status as binary variable 'student' with values of 0 (no) and 1 (yes).
+- relative socio-economic disadvantage using SA1 Index of Relative Socio-economic Disadvantage deciles (`IRSD`), ranging from 1 to 10.
 
 ### Data preparation
 
 Missing data or NA values (e.g 99997 and 99998) are replaced as missing, while maximum values of walking time variables are truncated at 840 minutes to constrain influence of extreme outliers.
 
-SA1 Index of Relative Socio-economic Disadvantage (IRSD; `SA1SF2DN`) is rescaled to use quintiles rather than deciles, for consistency with the synthetic population, with '1' being most deprived and '5' being least deprived.
+The NHS SA1 Index of Relative Socio-economic Disadvantage (IRSD; `SA1SF2DN`) is rescaled to use quintiles rather than deciles, for consistency with the synthetic population, with '1' being most deprived and '5' being least deprived.
 
-Two age variables will be created for consideration, first as a factor variable and second in years, using the first age bracket year.
+Age will be set up as a factor variable having age groups of < 25 and then by decade through to over 75, in order to match the JIBE Manchester model.
 
-To match the synthetic population data for Melbourne a binary indicator 'is_employed' will be created, along with a possible supplementary indicator 'is_student' that could be derived for the synthetic population.
-
-Education will be summarised using categories of low, medium and high for direct comparison with the synthetic population.
+To match the synthetic population data for Melbourne a binary indicators 'is_employed' and 'student_status' will be created.
 
 Marginal metabolic equivalent hours per week (mMET hours/week; `mmet`) are calculated as the sum of hours spent walking for recreation, doing moderate exercise and doing vigorous exercise, with each respectively multiplied by the metabolic equivalent of these tasks (METs) minus one (already in MMETs in code).  These have been rounded to integers to support consideration of negative binomial models, that may make sense for this type of positive skewed zero-inflated data (a possible alternative to a linear hurdle model).
 
@@ -245,51 +240,32 @@ pa_data <- nhs  %>%
         irsd_sa1_quintile_cat = relevel(irsd_sa1_quintile_cat, ref = "3 (reference)")
     ) %>%
     mutate(
-        age_years = case_when(
-            AGEB == 5 ~ 18,
-            AGEB == 6 ~ 20,
-            AGEB == 7 ~ 25,
-            AGEB == 8 ~ 30,
-            AGEB == 9 ~ 35,
-            AGEB == 10 ~ 40,
-            AGEB == 11 ~ 45,
-            AGEB == 12 ~ 50,
-            AGEB == 13 ~ 55,
-            AGEB == 14 ~ 60,
-            AGEB == 15 ~ 65,
-            AGEB == 16 ~ 70,
-            AGEB == 17 ~ 75,
-            AGEB == 18 ~ 80,
-            AGEB == 19 ~ 85,
-            TRUE ~ NA_real_  # Handle unexpected values
+        age_group = case_when(
+            AGEB < 7 ~ "age_group_under25",
+            AGEB < 9 ~ "age_group_25_34",
+            AGEB < 11 ~ "age_group_35_44",
+            AGEB < 13 ~ "age_group_45_54",
+            AGEB < 15 ~ "age_group_55_64",
+            AGEB < 17 ~ "age_group_65_74",
+            AGEB >= 17 ~ "age_group_over75",
+            TRUE ~ NA_character_  # Handle unexpected values
         ),
-            AGEB = factor(
-                AGEB, 
-                levels = 5:19, 
-                labels = c("18-19","20-24", "25-29", "30-34", "35-39", 
-                            "40-44", "45-49", "50-54", "55-59", 
-                            "60-64", "65-69", "70-74", "75-79", 
-                            "80-84", "≥85"),
-                ordered = FALSE
+        age_group = factor(
+            age_group,
+            levels = c(
+                "age_group_under25",
+                "age_group_25_34",
+                "age_group_35_44",
+                "age_group_45_54",
+                "age_group_55_64",
+                "age_group_65_74",
+                "age_group_over75"
             ),
-        female=ifelse(SEX==2,1,0),
-        is_employed=case_when(
-                LFSBC==1 ~ 1,
-                LFSBC %in% c(0,2,3) ~ 0
-            ),
-        is_student=ifelse(STDYFTPT %in% c(1,2),1,0),
-        education = case_when(
-            HIGHLVBC %in% c(1,2) ~ 2,
-            HIGHLVBC %in% c(3,7) ~ 1,
-            HIGHLVBC %in% c(8,12) ~ 0,
-            TRUE ~ NA_real_  # Handle unexpected values
-            ),
-        education = factor(
-            education,
-            levels=0:2,
-            labels=c('low','medium','high'),
-            ordered=FALSE
-        )
+            ordered = FALSE
+        ),
+        female=SEX==2,
+        is_employed = LFSBC == 1,
+        student_status = STDYFTPT %in% c(1, 2),
     )  %>%
     mutate(
         mmet_hrs_wk_recreation = round(
@@ -463,7 +439,7 @@ Many of our variables are factor variables for which direct numeric correlations
 ```{r}
 #| label: explore-correlations
 #| output: true
-cor=as.data.frame(lapply(pa_data[, c("irsd_sa1", "age_years", "female", "is_employed", "is_student", "education", "NUMPERBC", "mmet_hrs_wk_recreation")], as.numeric))
+cor=as.data.frame(lapply(pa_data[, c("irsd_sa1", "age_group", "female", "is_employed", "student_status", "NUMPERBC", "mmet_hrs_wk_recreation")], as.numeric))
 cor=na.omit(cor)
 correlation_matrix <- cor(cor) %>% as.data.frame()
 # corrplot(correlation_matrix %>% as.double(), method = "number",order = "FPC",type="lower") 
@@ -493,24 +469,13 @@ Select relevant variables and only retain records with full data.
 #| label: collate-modelling-data
 #| output: true
 pa_data =pa_data[
-    c('ABSPID', 'AGEB', 'age_years', 'female', 'is_employed', 'education', 'irsd_sa1','irsd_sa1_quintile_cat','mmet_hrs_wk_recreation', 'mmet_hrs_wk_recreation_zero')
+    c('ABSPID', 'age_group', 'female', 'is_employed', 'student_status', 'irsd_sa1','irsd_sa1_quintile_cat','mmet_hrs_wk_recreation', 'mmet_hrs_wk_recreation_zero')
     ] %>% na.omit()
 
 pa_data %>% st(out='kable')
 ```
 
-Now the full analytical sample has been determined, its worth noting the sample sizes for the default reference categories of the factor variables summarised above.  For age, the first category (default reference) is ages 18-19, for which there are only 33 individuals; this is further reduced to 19 after those with zero recorded recreational physical activity are excluded (below).  Comparisons with this category against all others will result in poor estimates lacking precision due to the small referrent group sample size (see Lash, Timothy L. et al., eds. Modern Epidemiology. 4th ed. Phil: Wolters Kluwer / Lippincott Williams & Wilkins, 2021. [p719](https://ebookcentral.proquest.com/lib/rmit/reader.action?docID=6947080&ppg=719)).  A better reference choice, if including age as categorical instead of continuous, would be persons aged 35-39 (n=856, or n=627 undertaking any recreational physical activity).  
-
-A similar issue is observed with education where 'low' only contains n=59 individuals, compared to 2103 (medium) and 3513 (high).  While the high category has the largest sample count in the NHS reference data, 'medium' is the most meaningful normative reference point and also the most common category in the synthetic population; so the reference for education should be set to 'medium'.
-
-The middle quintile '3' was already set as a reference category in the data set up stage, as the normative group.
-
-```{r}
-pa_data$AGEB <- relevel(pa_data$AGEB, ref = "35-39")
-pa_data$education <- relevel(pa_data$education, ref = "medium")
-```
-
-With intentional factor variable reference levels established, a subset of data for persons who record at least some mMET hours/week will be copied to a new dataframe.
+Now the full analytical sample has been determined, a subset of data for persons who record at least some mMET hours/week will be copied to a new dataframe.
 
 ```{r}
 #| label: collate-modelling-positive-mMETS-data
@@ -529,27 +494,17 @@ Let's have a look at the age brackets in the synthetic population first:
 summary_stats_by(pp,'Age','age_cat') %>% print(n=Inf)
 ``` 
 
-The age brackets don't match the NHS variable; as expected, we'll have to create a new age bracket variable.  
+To match the age group variable derived for the NHS survey based on JIBE Manchester, we'll have to derive new age brackets for the synthetic population.  
 
 ```{r}
-age_breaks <- c(18, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, Inf)
-age_labels <- c("18-19", "20-24", "25-29", "30-34", "35-39", 
-                "40-44", "45-49", "50-54", "55-59", 
-                "60-64", "65-69", "70-74", "75-79", 
-                "80-84", "≥85")
-pp$AGEB <- cut(pp$Age, breaks = age_breaks, labels = age_labels, right = FALSE)
-pp$AGEB <- relevel(pp$AGEB, ref = "35-39")
-summary_stats_by(pp,'Age','AGEB') %>% print(n=Inf)
+age_breaks <- c(-Inf, 25, 35, 45, 55, 65, 75, Inf)
+age_labels <- c("age_group_under25", "age_group_25_34", "age_group_35_44", "age_group_45_54", "age_group_55_64", "age_group_65_74", "age_group_over75")
+
+pp$age_group <- cut(pp$Age, breaks = age_breaks, labels = age_labels, right = FALSE)
+summary_stats_by(pp,'Age','age_group') %>% print(n=Inf)
 ```
 
 Great, so now there's an age bracket variable in the synthetic population that matches the NHS data breaks.
-
-We also want to set the reference levels for other variables to match those in the NHS drawn physical activity data.
-
-```{r}
-pp$education <- factor(pp$education)
-pp$education <- relevel(pp$education, ref = "medium")
-```
 
 There are some remaining variables to derive in order to get our synthetic population data into the equivalent format to our model, e.g. by converting string categorical variables to binary indicators and adapting the SEIFA IRSD to quintiles. Then we can use our predictions and apply them to the synthetic population.
 
@@ -558,14 +513,14 @@ There are some remaining variables to derive in order to get our synthetic popul
 #| output: true
 # Perform the transformations
 pp[, `:=`(
-    irsd_sa1 = fifelse(IRSAD %in% c(1, 2), 1,
-                fifelse(IRSAD %in% c(3, 4), 2,
-                fifelse(IRSAD %in% c(5, 6), 3,
-                fifelse(IRSAD %in% c(7, 8), 4,
-                fifelse(IRSAD %in% c(9, 10), 5, NA_real_))))),
-    age_years = Age,
-    female = fifelse(Gender == "Female", 1, 0),
-    is_employed = fifelse(is_employed == "Yes", 1, 0)
+    irsd_sa1 = fifelse(IRSD %in% c(1, 2), 1,
+                fifelse(IRSD %in% c(3, 4), 2,
+                fifelse(IRSD %in% c(5, 6), 3,
+                fifelse(IRSD %in% c(7, 8), 4,
+                fifelse(IRSD %in% c(9, 10), 5, NA_real_))))),
+    female = Gender == "Female",
+    is_employed = is_employed == "Yes",
+    student_status = student_status
 )]
 
 pp$irsd_sa1_quintile_cat = factor(
@@ -576,7 +531,7 @@ pp$irsd_sa1_quintile_cat = factor(
 pp$irsd_sa1_quintile_cat = relevel(pp$irsd_sa1_quintile_cat, ref = "3 (reference)")
 
 # Select the relevant columns
-data <- pp[Age >= 18, .(AgentId, age_years, AGEB, female, is_employed, education, irsd_sa1, irsd_sa1_quintile_cat)] 
+data <- pp[Age >= 18, .(AgentId, age_group, female, is_employed, student_status, irsd_sa1, irsd_sa1_quintile_cat)] 
 data %>% st(out='kable')
 ```
 
@@ -601,7 +556,7 @@ m.mMETs_recreational <- list()
 
 # Logistic regression model of zero mMETS hours/week
 m.mMETs_recreational$zeroModel <- glm(
-    mmet_hrs_wk_recreation_zero ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation_zero ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
     family = "binomial",
     data = pa_data
 )
@@ -615,7 +570,7 @@ summ(m.mMETs_recreational$zeroModel, confint = TRUE, digits = 3)
 
 # Negative binomial model for amount of mMET hours/week physical activity
 m.mMETs_recreational$neg_binom_over0 <- glm.nb(
-    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
     data = pa_data_over0
 )
 
@@ -675,18 +630,18 @@ Lets look at effects from the main predictive model for amount of mMET hours/wee
 #| label: effects-plots
 #| output: true
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = AGEB, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$neg_binom_over0, pred = age_group, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 effect_plot(
     m.mMETs_recreational$neg_binom_over0, pred = female, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
             
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = education, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$neg_binom_over0, pred = is_employed, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
             
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = is_employed, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$neg_binom_over0, pred = student_status, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
             
 effect_plot(
@@ -734,15 +689,35 @@ mmets_prediction[, mMETs_recreational := ifelse(
 #### Join estimates to synthetic population
 
 ```{r}
+#| label: synpop-join-ggplot
+#| output: true
 synpop[mmets_prediction,on='AgentId',mMETs_recreational := i.mMETs_recreational]
 summary(synpop$mMETs_recreational)
 ggplot(synpop)+stat_ecdf(aes(x=mMETs_recreational))
 ```
 
+Running the above, it is apparent that a substantial number of individuals have NA values for `mMETS_recreational`.  This might make sense for persons aged < 18 because the model does not support results for children.  However, it should be confirmed that adults do not have NA values for `mMETS_recreational`.
+
+```{r}
+#| label: synpop-check-na
+#| output: true
+synpop[is.na(synpop$IRSD) & synpop$Age >= 18,
+    c("Age","Gender","is_employed","student_status","IRSD")
+    ] %>% is.na %>% colSums()
+```
+
+So 5,558 synthetic individuals live in SA1 areas having NA for IRSD.  This is plausible; [SA1 areas were excluded](https://www.ausstats.abs.gov.au/ausstats/subscriber.nsf/0/756EE3DBEFA869EFCA258259000BA746/$File/SEIFA%202016%20Technical%20Paper.pdf) from being assigned socio-econimic indices for areas (including IRSD) if having low population counts (< 5) or low response rates (which is more likely in areas with low population); such areas may also be industrial areas with negligible population counts.  Using a copy of the [ABS SEIFA 2016 indices](https://www.abs.gov.au/ausstats/subscriber.nsf/log?openagent&2033055001%20-%20sa1%20indexes.xls&2033.0.55.001&Data%20Cubes&40A0EFDE970A1511CA25825D000F8E8D&0&2016&27.03.2018&Latest) linked to the JIBE Greater Melbourne zone file of SA1s, I found that 325/10,289 SA1 areas (1.6%) were not assigned an IRSD, having an estimated usual resident population of 14,014.  That our synthetic population having NA for IRSD (5,558 / 4,174,056; 0.13%) is below this count reflects the lower likelihood of individuals living in such areas.   
+
+The result is, that those individuals living in areas without IRSD are not able to be assigned reacreational mMET hours/week estimates under the current model.
+
+Possibilities include: 1) exclude these individuals; 2) assign them an IRSD that would allow the model to be run for them, acknowledging the limitation of uncertainty for those estimates.  The latter could be done geographically inferring IRSD from proximal SA1 areas, or statistically, assigning NA based on the median observed IRSD assignment (6).  The latter would be a straightforward approach that could allow mMET estimates to be derived for individuals, with median area level IRSD reflecting uncertainty as to the true area.  I believe this is defensible since area level IRSD is an ecological variable that may not reflect true individual disadvantage in any case.
+
+For now, those individuals with NA values have been left in this way; this may be revised pending discussion.
+
 ```{r}
 #| label: save-predicted-mMETS-synpop
 #| output: true
-fwrite(synpop,"pp_health_2021_mMETS_recreational.csv")
+fwrite(synpop,"pp_health_2018_mMETS_recreational.csv")
 ```
 
 ```{r}
@@ -803,39 +778,6 @@ The resulting synthetic population estimates for mMET hours/week arguably make s
 
 ## Sensitivity analysis
 
-### Age as categorical or continuous
-
-Age appears to be only mildly non-linear, and basically appears associated with a monotonic reduction in mMET hours/week as one ages, with a steeper rate of decline beyond age 70.  However, in a model there could be advantages for approximating this as a linear process; were it to matter (it doesn't for this use case, because the aim is not inference) there would be more statistical power modelling it as a continuous rather than categorical process.  Categorical variables can also risk overfitting to noisy processes in the sample data.  Let's explore the influence of the choice.
-
-There may be some non-linearity (e.g. 18-19 year olds median METS are lower, but perhaps not meaningfully so), but broadly, younger people have higher mMETs:
-
-```{r}
-#| label: visualise-age-distribution
-#| output: true
-ggplot(pa_data,aes(x=AGEB, y=mmet_hrs_wk_recreation)) + geom_boxplot() + coord_flip()
-qplot(x=pa_data$age_years,y=pa_data$mmet_hrs_wk_recreation, geom='smooth', span =0.5)
-```
-
-Looking at the qplot, to me it seems reasonable on grounds of parsimony to model the relationship between age and mMET hours/week as a linear function. There is a drop off after 70, however our data is relatively sparse beyond there and our last category does capture persons older than 85. Its easier to interpret the story from the qplot than boxplots too.
-
-On the other hand, because the purpose of this model is for prediction rather than inference, maybe it would make sense to leave as a categorical variable.  This would match the approach taken for Manchester, using age as a factor variable to account for non-linearity.
-
-```{r}
-m.mMETs_recreational$neg_binom_over0_years <- glm.nb(
-    mmet_hrs_wk_recreation ~ female + age_years + is_employed + education + irsd_sa1_quintile_cat,
-    data = pa_data_over0
-)
-
-summ(m.mMETs_recreational$neg_binom_over0_years, confint = TRUE, digits = 3)
-summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
-
-anova(m.mMETs_recreational$neg_binom_over0, m.mMETs_recreational$neg_binom_over0_years, test='LRT')
-```
-
-The model with years as continuous is easier to understand at a glance; it arguably more clearly indicates that there is an approximately linear negative association between age and recreational physical activity amount.
-
-However, the difference in AIC is negligible and slightly lower for the model with age as a categorical variable.  Statistically, the likelihood ratio test also suggests the model with age as a categorical variable is the preferred model.  The latter was ultimately used in the main analysis.
-
 ### Hurdle model
 
 A hurdle model is a natural choice for rate data like marginal MET hours/week for recreation, because it can describe two distinct data generating processes: individuals' undertaking of any recorded recreational physical activity, and mMET hours/week for those who undertake any. In the context of physical activity data, many individuals may report zero physical activity, while others report varying positive amounts. The hurdle model first models the probability of a zero versus a non-zero outcome using a binomial model, and then models the positive counts separately using a truncated count model (e.g., Poisson or Negative Binomial). This approach can allow for more accurate modeling of the data distribution when there is an excess of zeros and overdispersion in the positive counts, which is common in physical activity data.
@@ -871,18 +813,18 @@ The various modelling choices are evaluated below to understand their implicatio
 
 library(pscl) # for zero-inflated model
 m.mMETs_recreational$linear <- lm(
-    mmet_hrs_wk_recreation ~ female + AGEB + is_employed+education + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
     data = pa_data_over0)
 
 m.mMETs_recreational$poisson <- glm(
-    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
     family = "poisson",
     data = pa_data_over0
 )
 
 # zero-inflated model uses the full data as an alternative to the hurdle model
 m.mMETs_recreational$zinb <- zeroinfl(
-    mmet_hrs_wk_recreation ~ female + AGEB + is_employed + education + irsd_sa1_quintile_cat | female + AGEB + is_employed + education + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat | female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
     data = pa_data,
     dist = "negbin"
 )
