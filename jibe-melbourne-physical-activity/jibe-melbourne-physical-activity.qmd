@@ -13,7 +13,7 @@ This Quarto markdown document is intended to contain code to predict physical ac
 
 The analysis draws on Belen Zapata-Diomedi's code for cleaning the NHS dataset (../document.qmd), and Belen Zapata-Diomedi, Qin Zhang and Marina Berdikhanova's code for a predictive model of marginal metabolic equivalent hours per week (mMET house/week) for Manchester, UK.
 
-For comparability with the Manhcester model in the JIBE workflow, we may wish to more or less closely mirror the variables used in the physical activity model, as detailed in the Manchester coefficients file, `sportPAmodel.csv`.  This contains a binary gender indicator (`female`), an age group factor variable (<25, 25-34, 35-44, 45-54, 55-64, 65-74, 75+), work status (retired, student or unemployed), and relative socio-economic disadvantage (UK Index of Multiple Deprivation; `imd10`).
+For comparability with the Manhcester model in the JIBE workflow, we may wish to more or less closely mirror the variables used in the physical activity model, as detailed in the Manchester coefficients file, `sportPAmodel.csv`.  This contains a binary gender indicator (`female`), an age group factor variable (<25, 25-34, 35-44, 45-54, 55-64, 65-74, 75+), work status (retired, student or ddddunemployed), and relative socio-economic disadvantage (UK Index of Multiple Deprivation; `imd10`).  The latter variable is included as a continuous variable in the Manchester analysis.  
 
 ## Usage
 
@@ -32,7 +32,7 @@ Analysis was conducted using R 4.4.1 using a Quarto markdown document (Quarto 1.
 The following packages have been installed using renv:
 
 ```         
-renv::install(c('dplyr','data.table','ggplot2','vtable','rmarkdown','pscl'))
+renv::install(c('dplyr','data.table','ggplot2','vtable','rmarkdown','pscl','jtools'))
 ```
 
 In principle, the R environment for this notebook should be able to be restored by running
@@ -57,7 +57,7 @@ library(MASS) # for glm negative binomial model
 
 [National Health Survey](https://www.abs.gov.au/statistics/microdata-tablebuilder/available-microdata-tablebuilder/national-health-survey) (NHS) data for 2017-18 were retrieved from the [Microdata Downloads](https://microdatadownload.abs.gov.au/MicrodataDownload/login.xhtml) section of the Australian Bureau of Statistics website on 3 December 2024. ABS Microdata were accessed under the [ABS/Universities Australia Agreement (2024)](https://www.abs.gov.au/statistics/microdata-tablebuilder/absuniversities-australia-agreement) by Carl Higgs (RMIT University). The NHS Microdata data descriptions are available for download [here](https://www.abs.gov.au/statistics/microdata-tablebuilder/available-microdata-tablebuilder/national-health-survey#data-item-lists).
 
-NHS microdata are provided in CSV, SAS, SPSS, or Stata formats. The CSV data do not have labels, hence the `haven` package could be installed to read the labelled data in .dta (Stata) format. However, perhaps labels are not required --- for now, CSV will be used to keep things simple.
+NHS microdata are provided in CSV, SAS, SPSS, or Stata formats. The CSV data do not have labels. The `haven` package could be installed to read the labelled data in .dta (Stata) format. However, perhaps labels are not required --- for now, CSV will be used to keep things simple.
 
 | File (csv, dta, etc) | Description                |
 |----------------------|----------------------------|
@@ -432,10 +432,6 @@ knitr::kable(
 
 #### Correlations
 
-For now I have included both education variables in the below exploratory data analysis, although most likely a derived combined variable for education will be used, pending discussion with the team. The State variable is also included to get a sense of how variables differ across Australian states; Victorian-specific results could be expected to be mostly drawn from Melbourne, and this could be explored in a sensitivity analysis.
-
-Many of our variables are factor variables for which direct numeric correlations could be misleading (i.e. they aren't necessarily ordinal or linear, e.g. labour force status, or 'NA' values in educational attainment).
-
 ```{r}
 #| label: explore-correlations
 #| output: true
@@ -446,7 +442,7 @@ correlation_matrix <- cor(cor) %>% as.data.frame()
 correlation_matrix[order(correlation_matrix$mmet_hrs_wk_recreation),] %>% round(2)
 ```
 
-None of the variables in themselves are strongly associated with mMET hours/week. Age is associated with lower mMET hours/week, as is being female (negative correlations). Associations with age may be slightly non-linear; a sensitivity analysis further below suggests that although mMET hours/week peaked in the 20-24 years age group not the youngest (18-19 years; n=33, the smallest sample and may not be representative), the trend is broadly monotonic and arguably approximately linear albeit with increasing rate of decline after age 70.  Number of persons in household and being a student were not associated with mMETs and need not be included in the model. Employment, lower socio-economic deprivation, and higher degree of education had weak positive associations with mMET hours/week.
+None of the variables in themselves display clear associatino with mMET hours/week. Age is associated with lower mMET hours/week, as is being female (negative correlations). Number of persons in household and being a student were not associated with mMETs. Employment, lower socio-economic deprivation, and higher degree of education had weak positive associations with mMET hours/week.
 
 #### Clustering
 
