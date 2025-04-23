@@ -182,7 +182,7 @@ Considering the above, including the Manchester model specifications with which 
 
 Missing data or NA values (e.g 99997 and 99998) are replaced as missing, while maximum values of walking time variables are truncated at 840 minutes to constrain influence of extreme outliers.
 
-The NHS SA1 Index of Relative Socio-economic Disadvantage (IRSD; `SA1SF2DN`) is rescaled to use quintiles rather than deciles, for consistency with the synthetic population, with '1' being most deprived and '5' being least deprived.
+The NHS SA1 Index of Relative Socio-economic Disadvantage (IRSD; `SA1SF2DN`) is retained in decile form for comparability with the Manchester approach ([preliminary analysis](https://github.com/jibeproject/physical-activity-Melbourne/issues/2) treating this as a factor variable suggested the association between reduced deprivation and mMET hours/week was negative linear and monotonic in any case).
 
 Age will be set up as a factor variable having age groups of < 25 and then by decade through to over 75, in order to match the JIBE Manchester model.
 
@@ -223,23 +223,7 @@ pa_data <- nhs  %>%
             )
     ) %>%
     mutate(
-        irsd_sa1 = case_when(
-            SA1SF2DN %in% c(1, 2) ~ 1,
-            SA1SF2DN %in% c(3, 4) ~ 2,
-            SA1SF2DN %in% c(5, 6) ~ 3,
-            SA1SF2DN %in% c(7, 8) ~ 4,
-            SA1SF2DN %in% c(9, 10) ~ 5
-        ),
-        irsd_sa1_quintile_cat = factor(
-            irsd_sa1, 
-            levels = 1:5, 
-            labels = c("1 (most deprived)", "2", "3 (reference)", "4", "5 (least deprived)")
-        )
-    ) %>% 
-    mutate(
-        irsd_sa1_quintile_cat = relevel(irsd_sa1_quintile_cat, ref = "3 (reference)")
-    ) %>%
-    mutate(
+        irsd_sa1 = SA1SF2DN,
         age_group = case_when(
             AGEB < 7 ~ "age_group_under25",
             AGEB < 9 ~ "age_group_25_34",
@@ -465,7 +449,7 @@ Select relevant variables and only retain records with full data.
 #| label: collate-modelling-data
 #| output: true
 pa_data =pa_data[
-    c('ABSPID', 'age_group', 'female', 'is_employed', 'student_status', 'irsd_sa1','irsd_sa1_quintile_cat','mmet_hrs_wk_recreation', 'mmet_hrs_wk_recreation_zero')
+    c('ABSPID', 'age_group', 'female', 'is_employed', 'student_status', 'irsd_sa1','mmet_hrs_wk_recreation', 'mmet_hrs_wk_recreation_zero')
     ] %>% na.omit()
 
 pa_data %>% st(out='kable')
@@ -502,32 +486,21 @@ summary_stats_by(pp,'Age','age_group') %>% print(n=Inf)
 
 Great, so now there's an age bracket variable in the synthetic population that matches the NHS data breaks.
 
-There are some remaining variables to derive in order to get our synthetic population data into the equivalent format to our model, e.g. by converting string categorical variables to binary indicators and adapting the SEIFA IRSD to quintiles. Then we can use our predictions and apply them to the synthetic population.
+There are some remaining variables to derive in order to get our synthetic population data into the equivalent format to our model. Then we can use our predictions and apply them to the synthetic population.
 
 ```{r}
 #| label: prepare-synthetic-population-prediction
 #| output: true
 # Perform the transformations
 pp[, `:=`(
-    irsd_sa1 = fifelse(IRSD %in% c(1, 2), 1,
-                fifelse(IRSD %in% c(3, 4), 2,
-                fifelse(IRSD %in% c(5, 6), 3,
-                fifelse(IRSD %in% c(7, 8), 4,
-                fifelse(IRSD %in% c(9, 10), 5, NA_real_))))),
+    irsd_sa1 = IRSD,
     female = Gender == "Female",
     is_employed = is_employed == "Yes",
     student_status = student_status
 )]
 
-pp$irsd_sa1_quintile_cat = factor(
-        pp$irsd_sa1, 
-        levels = 1:5, 
-        labels = c("1 (most deprived)", "2", "3 (reference)", "4", "5 (least deprived)")
-    )
-pp$irsd_sa1_quintile_cat = relevel(pp$irsd_sa1_quintile_cat, ref = "3 (reference)")
-
 # Select the relevant columns
-data <- pp[Age >= 18, .(AgentId, age_group, female, is_employed, student_status, irsd_sa1, irsd_sa1_quintile_cat)] 
+data <- pp[Age >= 18, .(AgentId, age_group, female, is_employed, student_status, irsd_sa1)] 
 data %>% st(out='kable')
 ```
 
@@ -552,7 +525,7 @@ m.mMETs_recreational <- list()
 
 # Logistic regression model of zero mMETS hours/week
 m.mMETs_recreational$zeroModel <- glm(
-    mmet_hrs_wk_recreation_zero ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation_zero ~ female + age_group + is_employed + student_status + irsd_sa1,
     family = "binomial",
     data = pa_data
 )
@@ -566,7 +539,7 @@ summ(m.mMETs_recreational$zeroModel, confint = TRUE, digits = 3)
 
 # Negative binomial model for amount of mMET hours/week physical activity
 m.mMETs_recreational$neg_binom_over0 <- glm.nb(
-    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1,
     data = pa_data_over0
 )
 
@@ -641,7 +614,7 @@ effect_plot(
             jitter = 0.05)
             
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = irsd_sa1_quintile_cat, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$neg_binom_over0, pred = irsd_sa1, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 ```
 
@@ -809,18 +782,18 @@ The various modelling choices are evaluated below to understand their implicatio
 
 library(pscl) # for zero-inflated model
 m.mMETs_recreational$linear <- lm(
-    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1,
     data = pa_data_over0)
 
 m.mMETs_recreational$poisson <- glm(
-    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1,
     family = "poisson",
     data = pa_data_over0
 )
 
 # zero-inflated model uses the full data as an alternative to the hurdle model
 m.mMETs_recreational$zinb <- zeroinfl(
-    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1_quintile_cat | female + age_group + is_employed + student_status + irsd_sa1_quintile_cat,
+    mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1 | female + age_group + is_employed + student_status + irsd_sa1,
     data = pa_data,
     dist = "negbin"
 )
