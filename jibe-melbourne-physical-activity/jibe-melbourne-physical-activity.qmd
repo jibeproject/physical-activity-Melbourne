@@ -570,8 +570,9 @@ summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
 
 The hurdle model results indicate that the likelihood of reporting zero recreational physical activity (logistic regression) increases significantly with age, particularly for individuals aged 35 and older, with the strongest effect observed in the 75+ age group. Employment and student status are associated with lower odds of reporting zero activity, while higher socio-economic status (measured by IRSD) also reduces the likelihood of zero activity. According to the negative binomial model for those reporting non-zero activity, the amount of recreational physical activity decreases with age, with the largest reduction observed in the 75+ age group. Women engage in significantly less activity than men, while employment is associated with slightly higher activity levels. Socio-economic status has a small but positive association with the amount of activity, while clear evidence was not identified for an association between student status and recreational activity levels.
 
-```{r model-combined-results}
-
+```{r}
+#| label: model-combined-results
+#| output: true
 
 # Extract coefficients from the negative binomial model
 sportPAmodel <- data.frame(
@@ -581,9 +582,9 @@ sportPAmodel <- data.frame(
 print(sportPAmodel)
 
 
-output_file <- "../input/health/sportPAmodel_raw_hurdle_model.csv"
+output_file <- "../../input/health/sportPAmodel_raw_hurdle_model.csv"
 dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
-write.csv(sportPAmodel, file = output_file, row.names = FALSE)
+write.csv(sportPAmodel, file = output_file, row.names = TRUE)
 cat("Recreational mMET hours/week (Sport/PA model) coefficients saved to:", output_file, "\n")
 
 ```

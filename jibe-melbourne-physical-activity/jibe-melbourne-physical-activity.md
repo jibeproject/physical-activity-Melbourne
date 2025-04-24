@@ -975,20 +975,31 @@ identified for an association between student status and recreational
 activity levels.
 
 ``` r
-
-
 # Extract coefficients from the negative binomial model
 sportPAmodel <- data.frame(
   Zero_Model = m.mMETs_recreational$zeroModel$coefficients,
   Neg_Binom_Model = m.mMETs_recreational$neg_binom_over0$coefficients
 )
 print(sportPAmodel)
+##                             Zero_Model Neg_Binom_Model
+## (Intercept)                0.044666911      2.79802821
+## femaleTRUE                -0.004902267     -0.23810983
+## age_groupage_group_25_34   0.053567493     -0.05021519
+## age_groupage_group_35_44   0.205214777     -0.17257809
+## age_groupage_group_45_54   0.283538562     -0.15718689
+## age_groupage_group_55_64   0.330456455     -0.16057669
+## age_groupage_group_65_74   0.225089953     -0.17960424
+## age_groupage_group_over75  0.772364276     -0.45155329
+## is_employedTRUE           -0.272948987      0.10850383
+## student_statusTRUE        -0.349519395      0.01167917
+## irsd_sa1                  -0.125746061      0.02685566
 
 
-output_file <- "../input/health/sportPAmodel_raw_hurdle_model.csv"
+output_file <- "../../input/health/sportPAmodel_raw_hurdle_model.csv"
 dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
-write.csv(sportPAmodel, file = output_file, row.names = FALSE)
+write.csv(sportPAmodel, file = output_file, row.names = TRUE)
 cat("Recreational mMET hours/week (Sport/PA model) coefficients saved to:", output_file, "\n")
+## Recreational mMET hours/week (Sport/PA model) coefficients saved to: ../../input/health/sportPAmodel_raw_hurdle_model.csv
 ```
 
 ### Evaluating model fit
@@ -1104,7 +1115,7 @@ mmets_prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
 table(mmets_prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 2015344 1178469
+## 2013919 1179894
 ```
 
 #### Prediction of amount of recreational physical activity
@@ -1238,9 +1249,9 @@ knitr::kable(
 | NHS (recreation) | Men | 7575 | 11.47 | 17.20 | 0 | 0.00 | 4.00 | 16.00 | 147.00 |
 | NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 4.00 | 12.00 | 182.00 |
 | NHS (recreation) | Overall | 16359 | 10.05 | 15.49 | 0 | 0.00 | 4.00 | 14.00 | 182.00 |
-| Synthetic population (recreation) | Men | 1542991 | 10.94 | 8.50 | 0 | 0.00 | 15.98 | 17.85 | 21.72 |
+| Synthetic population (recreation) | Men | 1542991 | 10.92 | 8.51 | 0 | 0.00 | 15.80 | 17.85 | 21.72 |
 | Synthetic population (recreation) | Women | 1650822 | 8.57 | 6.68 | 0 | 0.00 | 12.45 | 14.03 | 17.12 |
-| Synthetic population (recreation) | Overall | 3193813 | 9.71 | 7.71 | 0 | 0.00 | 13.29 | 16.09 | 21.72 |
+| Synthetic population (recreation) | Overall | 3193813 | 9.70 | 7.71 | 0 | 0.00 | 13.29 | 16.09 | 21.72 |
 
 Marginal MET hours per week
 
