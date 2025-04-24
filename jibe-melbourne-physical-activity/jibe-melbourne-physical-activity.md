@@ -129,6 +129,32 @@ codes) include:
 | Moderate exercise (mins) | EXLWMMIN | Total minutes undertaken moderate exercise last week (for example, a light jog, strenght and toning exercises, lifting small boxes and sweeping) |
 | Vigorous exercise (mins) | EXLWVMIN | Total minutes undertaken vigorous exercise last week (for example, playing basketball, running, lifting heavy boxes, and strength and toning exercises) |
 
+Regarding the `AGEB` age bracket variable, the specific breaks for this
+are as follows (note that age brackets `4` and `5` are not 5-year
+brackets. This allows distinguishing persons aged 18 and over.
+
+| Value | Age group         |
+|-------|-------------------|
+| 1     | 0 - 4 years       |
+| 2     | 5 - 9 years       |
+| 3     | 10 - 14 years     |
+| 4     | 15 - 17 years     |
+| 5     | 18 - 19 years     |
+| 6     | 20 - 24 years     |
+| 7     | 25 - 29 years     |
+| 8     | 30 - 34 years     |
+| 9     | 35 - 39 years     |
+| 10    | 40 - 44 years     |
+| 11    | 45 - 49 years     |
+| 12    | 50 - 54 years     |
+| 13    | 55 - 59 years     |
+| 14    | 60 - 64 years     |
+| 15    | 65 - 69 years     |
+| 16    | 70 - 74 years     |
+| 17    | 75 - 79 years     |
+| 18    | 80 - 84 years     |
+| 19    | 85 years and over |
+
 ## Methods
 
 ### Read and join NHS data
@@ -351,7 +377,7 @@ pa_data <- nhs  %>%
     mutate(
         irsd_sa1 = SA1SF2DN,
         age_group = case_when(
-            AGEB < 7 ~ "age_group_under25",
+            AGEB < 7 ~ "age_group_18_25",
             AGEB < 9 ~ "age_group_25_34",
             AGEB < 11 ~ "age_group_35_44",
             AGEB < 13 ~ "age_group_45_54",
@@ -363,7 +389,7 @@ pa_data <- nhs  %>%
         age_group = factor(
             age_group,
             levels = c(
-                "age_group_under25",
+                "age_group_18_25",
                 "age_group_25_34",
                 "age_group_35_44",
                 "age_group_45_54",
@@ -411,7 +437,7 @@ pa_data %>% st(out='kable')
 | vig_excercise_min           | 16370 | 31   | 88        | 0   | 0        | 0        | 840 |
 | irsd_sa1                    | 16376 | 5.4  | 2.8       | 1   | 3        | 8        | 10  |
 | age_group                   | 16370 |      |           |     |          |          |     |
-| … age_group_under25         | 1174  | 7%   |           |     |          |          |     |
+| … age_group_18_25           | 1174  | 7%   |           |     |          |          |     |
 | … age_group_25_34           | 2576  | 16%  |           |     |          |          |     |
 | … age_group_35_44           | 2844  | 17%  |           |     |          |          |     |
 | … age_group_45_54           | 2800  | 17%  |           |     |          |          |     |
@@ -664,7 +690,7 @@ pa_data %>% st(out='kable')
 |:----------------------------|:------|:-----|:----------|:----|:---------|:---------|:----|
 | ABSPID                      | 16359 | 1    | 0         | 1   | 1        | 1        | 1   |
 | age_group                   | 16359 |      |           |     |          |          |     |
-| … age_group_under25         | 1172  | 7%   |           |     |          |          |     |
+| … age_group_18_25           | 1172  | 7%   |           |     |          |          |     |
 | … age_group_25_34           | 2574  | 16%  |           |     |          |          |     |
 | … age_group_35_44           | 2842  | 17%  |           |     |          |          |     |
 | … age_group_45_54           | 2800  | 17%  |           |     |          |          |     |
@@ -699,7 +725,7 @@ pa_data_over0 %>% st(out='kable')
 |:----------------------------|:------|:-----|:----------|:----|:---------|:---------|:----|
 | ABSPID                      | 10358 | 1    | 0         | 1   | 1        | 1        | 1   |
 | age_group                   | 10358 |      |           |     |          |          |     |
-| … age_group_under25         | 841   | 8%   |           |     |          |          |     |
+| … age_group_18_25           | 841   | 8%   |           |     |          |          |     |
 | … age_group_25_34           | 1797  | 17%  |           |     |          |          |     |
 | … age_group_35_44           | 1909  | 18%  |           |     |          |          |     |
 | … age_group_45_54           | 1817  | 18%  |           |     |          |          |     |
@@ -764,8 +790,8 @@ Manchester, we’ll have to derive new age brackets for the synthetic
 population.
 
 ``` r
-age_breaks <- c(-Inf, 25, 35, 45, 55, 65, 75, Inf)
-age_labels <- c("age_group_under25", "age_group_25_34", "age_group_35_44", "age_group_45_54", "age_group_55_64", "age_group_65_74", "age_group_over75")
+age_breaks <- c(18, 25, 35, 45, 55, 65, 75, Inf)
+age_labels <- c("age_group_18_25", "age_group_25_34", "age_group_35_44", "age_group_45_54", "age_group_55_64", "age_group_65_74", "age_group_over75")
 
 pp$age_group <- cut(pp$Age, breaks = age_breaks, labels = age_labels, right = FALSE)
 summary_stats_by(pp,'Age','age_group') %>% print(n=Inf)
@@ -792,27 +818,27 @@ data <- pp[Age >= 18, .(AgentId, age_group, female, is_employed, student_status,
 data %>% st(out='kable')
 ```
 
-| Variable            | N       | Mean    | Std. Dev. | Min | Pctl. 25 | Pctl. 75 | Max     |
-|:--------------------|:--------|:--------|:----------|:----|:---------|:---------|:--------|
-| AgentId             | 3199371 | 2084186 | 1204876   | 1   | 1041327  | 3133196  | 4174056 |
-| age_group           | 3199371 |         |           |     |          |          |         |
-| … age_group_under25 | 421222  | 13%     |           |     |          |          |         |
-| … age_group_25_34   | 660989  | 21%     |           |     |          |          |         |
-| … age_group_35_44   | 588970  | 18%     |           |     |          |          |         |
-| … age_group_45_54   | 547029  | 17%     |           |     |          |          |         |
-| … age_group_55_64   | 460392  | 14%     |           |     |          |          |         |
-| … age_group_65_74   | 305326  | 10%     |           |     |          |          |         |
-| … age_group_over75  | 215443  | 7%      |           |     |          |          |         |
-| female              | 3199371 |         |           |     |          |          |         |
-| … No                | 1545445 | 48%     |           |     |          |          |         |
-| … Yes               | 1653926 | 52%     |           |     |          |          |         |
-| is_employed         | 3199371 |         |           |     |          |          |         |
-| … No                | 3199371 | 100%    |           |     |          |          |         |
-| … Yes               | 0       | 0%      |           |     |          |          |         |
-| student_status      | 3199371 |         |           |     |          |          |         |
-| … No                | 2756114 | 86%     |           |     |          |          |         |
-| … Yes               | 443257  | 14%     |           |     |          |          |         |
-| irsd_sa1            | 3193813 | 6.1     | 2.8       | 1   | 4        | 8        | 10      |
+| Variable           | N       | Mean    | Std. Dev. | Min | Pctl. 25 | Pctl. 75 | Max     |
+|:-------------------|:--------|:--------|:----------|:----|:---------|:---------|:--------|
+| AgentId            | 3199371 | 2084186 | 1204876   | 1   | 1041327  | 3133196  | 4174056 |
+| age_group          | 3199371 |         |           |     |          |          |         |
+| … age_group_18_25  | 421222  | 13%     |           |     |          |          |         |
+| … age_group_25_34  | 660989  | 21%     |           |     |          |          |         |
+| … age_group_35_44  | 588970  | 18%     |           |     |          |          |         |
+| … age_group_45_54  | 547029  | 17%     |           |     |          |          |         |
+| … age_group_55_64  | 460392  | 14%     |           |     |          |          |         |
+| … age_group_65_74  | 305326  | 10%     |           |     |          |          |         |
+| … age_group_over75 | 215443  | 7%      |           |     |          |          |         |
+| female             | 3199371 |         |           |     |          |          |         |
+| … No               | 1545445 | 48%     |           |     |          |          |         |
+| … Yes              | 1653926 | 52%     |           |     |          |          |         |
+| is_employed        | 3199371 |         |           |     |          |          |         |
+| … No               | 3199371 | 100%    |           |     |          |          |         |
+| … Yes              | 0       | 0%      |           |     |          |          |         |
+| student_status     | 3199371 |         |           |     |          |          |         |
+| … No               | 2756114 | 86%     |           |     |          |          |         |
+| … Yes              | 443257  | 14%     |           |     |          |          |         |
+| irsd_sa1           | 3193813 | 6.1     | 2.8       | 1   | 4        | 8        | 10      |
 
 Summary Statistics
 
@@ -822,14 +848,6 @@ The modelling approach (and earlier data preparation) draws on code from
 the Manchester physical activity modelling R code file
 `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi
 and Marina Berdikhanova.
-
-Age as categorical does not display any clear trend, whereas there is a
-strong association for age when modelled as a continuous variable.
-Because the purpose of this model is prediction and not inference, the
-use of age brackets may be justified to account for the slight
-non-linearity observed when making predictions for the synthetic
-population. This implications of this decision will be explored further
-in subsequent sensitivity analysis.
 
 A negative binomial model was used to model the recreational physical
 activity data for those who recorded mMET hours/week as it was found to
@@ -939,6 +957,39 @@ summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
 | student_statusTRUE        |  0.012 | -0.050 |  0.074 |   0.368 | 0.713 |
 | irsd_sa1                  |  0.027 |  0.020 |  0.033 |   8.004 | 0.000 |
 |  Standard errors: MLE     |        |        |        |         |       |
+
+The hurdle model results indicate that the likelihood of reporting zero
+recreational physical activity (logistic regression) increases
+significantly with age, particularly for individuals aged 35 and older,
+with the strongest effect observed in the 75+ age group. Employment and
+student status are associated with lower odds of reporting zero
+activity, while higher socio-economic status (measured by IRSD) also
+reduces the likelihood of zero activity. According to the negative
+binomial model for those reporting non-zero activity, the amount of
+recreational physical activity decreases with age, with the largest
+reduction observed in the 75+ age group. Women engage in significantly
+less activity than men, while employment is associated with slightly
+higher activity levels. Socio-economic status has a small but positive
+association with the amount of activity, while clear evidence was not
+identified for an association between student status and recreational
+activity levels.
+
+``` r
+
+
+# Extract coefficients from the negative binomial model
+sportPAmodel <- data.frame(
+  Zero_Model = m.mMETs_recreational$zeroModel$coefficients,
+  Neg_Binom_Model = m.mMETs_recreational$neg_binom_over0$coefficients
+)
+print(sportPAmodel)
+
+
+output_file <- "../input/health/sportPAmodel_raw_hurdle_model.csv"
+dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
+write.csv(sportPAmodel, file = output_file, row.names = FALSE)
+cat("Recreational mMET hours/week (Sport/PA model) coefficients saved to:", output_file, "\n")
+```
 
 ### Evaluating model fit
 
@@ -1053,7 +1104,7 @@ mmets_prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
 table(mmets_prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 2014643 1179170
+## 2015344 1178469
 ```
 
 #### Prediction of amount of recreational physical activity
@@ -1187,7 +1238,7 @@ knitr::kable(
 | NHS (recreation) | Men | 7575 | 11.47 | 17.20 | 0 | 0.00 | 4.00 | 16.00 | 147.00 |
 | NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 4.00 | 12.00 | 182.00 |
 | NHS (recreation) | Overall | 16359 | 10.05 | 15.49 | 0 | 0.00 | 4.00 | 14.00 | 182.00 |
-| Synthetic population (recreation) | Men | 1542991 | 10.92 | 8.51 | 0 | 0.00 | 15.80 | 17.85 | 21.72 |
+| Synthetic population (recreation) | Men | 1542991 | 10.94 | 8.50 | 0 | 0.00 | 15.98 | 17.85 | 21.72 |
 | Synthetic population (recreation) | Women | 1650822 | 8.57 | 6.68 | 0 | 0.00 | 12.45 | 14.03 | 17.12 |
 | Synthetic population (recreation) | Overall | 3193813 | 9.71 | 7.71 | 0 | 0.00 | 13.29 | 16.09 | 21.72 |
 

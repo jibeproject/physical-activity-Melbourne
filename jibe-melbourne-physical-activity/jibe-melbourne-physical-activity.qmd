@@ -99,7 +99,7 @@ Person-level variables of interest (see data dictionaries for detailed codes) in
 | Moderate exercise (mins)   | EXLWMMIN                                | Total minutes undertaken moderate exercise last week (for example, a light jog, strenght and toning exercises, lifting small boxes and sweeping)        |
 | Vigorous exercise (mins)   | EXLWVMIN                                | Total minutes undertaken vigorous exercise last week (for example, playing basketball, running, lifting heavy boxes, and strength and toning exercises) |
 
-Regarding the `AGEB` age bracket variable, the specific breaks for this are as follows (note that age brackets `4` and `5` are not 5-year brackets.  This allows distinguishing persons aged 18 and over:
+Regarding the `AGEB` age bracket variable, the specific breaks for this are as follows (note that age brackets `4` and `5` are not 5-year brackets.  This allows distinguishing persons aged 18 and over.  
 
 |Value | Age group   |
 |------|-------------|
@@ -227,7 +227,6 @@ MMET_CYCLING <- 5.8 # From ithimr (check)
 MMET_WALKING <- 2.5 # From ithimr (check)
 
 pa_data <- nhs  %>%
-    filter(AGEB >= 5) %>%
     mutate_all(~ ifelse( . %in% c(99997, 99998), NA, .)) %>%
     mutate(
         walk_recreation_min = case_when(
@@ -262,7 +261,7 @@ pa_data <- nhs  %>%
         age_group = factor(
             age_group,
             levels = c(
-                "age_group_under25",
+                "age_group_18_25",
                 "age_group_25_34",
                 "age_group_35_44",
                 "age_group_45_54",
@@ -502,8 +501,8 @@ summary_stats_by(pp,'Age','age_cat') %>% print(n=Inf)
 To match the age group variable derived for the NHS survey based on JIBE Manchester, we'll have to derive new age brackets for the synthetic population.  
 
 ```{r}
-age_breaks <- c(-Inf, 25, 35, 45, 55, 65, 75, Inf)
-age_labels <- c("age_group_under25", "age_group_25_34", "age_group_35_44", "age_group_45_54", "age_group_55_64", "age_group_65_74", "age_group_over75")
+age_breaks <- c(18, 25, 35, 45, 55, 65, 75, Inf)
+age_labels <- c("age_group_18_25", "age_group_25_34", "age_group_35_44", "age_group_45_54", "age_group_55_64", "age_group_65_74", "age_group_over75")
 
 pp$age_group <- cut(pp$Age, breaks = age_breaks, labels = age_labels, right = FALSE)
 summary_stats_by(pp,'Age','age_group') %>% print(n=Inf)
@@ -532,8 +531,6 @@ data %>% st(out='kable')
 ### Modelling
 
 The modelling approach (and earlier data preparation) draws on code from the Manchester physical activity modelling R code file `otherSportPA_hurdle_v3.R` authored by Qin Zhang, Belen Zapata-Diomedi and Marina Berdikhanova.
-
-Age as categorical does not display any clear trend, whereas there is a strong association for age when modelled as a continuous variable.  Because the purpose of this model is prediction and not inference, the use of age brackets may be justified to account for the slight non-linearity observed when making predictions for the synthetic population.  This implications of this decision will be explored further in subsequent sensitivity analysis.
 
 A negative binomial model was used to model the recreational physical activity data for those who recorded mMET hours/week as it was found to provide a better prediction for the skewed data than a linear model.  Modelling options supporting this decision are explored in a sensitivity analysis further below.
 
@@ -569,6 +566,26 @@ m.mMETs_recreational$neg_binom_over0 <- glm.nb(
 )
 
 summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
+```
+
+The hurdle model results indicate that the likelihood of reporting zero recreational physical activity (logistic regression) increases significantly with age, particularly for individuals aged 35 and older, with the strongest effect observed in the 75+ age group. Employment and student status are associated with lower odds of reporting zero activity, while higher socio-economic status (measured by IRSD) also reduces the likelihood of zero activity. According to the negative binomial model for those reporting non-zero activity, the amount of recreational physical activity decreases with age, with the largest reduction observed in the 75+ age group. Women engage in significantly less activity than men, while employment is associated with slightly higher activity levels. Socio-economic status has a small but positive association with the amount of activity, while clear evidence was not identified for an association between student status and recreational activity levels.
+
+```{r model-combined-results}
+
+
+# Extract coefficients from the negative binomial model
+sportPAmodel <- data.frame(
+  Zero_Model = m.mMETs_recreational$zeroModel$coefficients,
+  Neg_Binom_Model = m.mMETs_recreational$neg_binom_over0$coefficients
+)
+print(sportPAmodel)
+
+
+output_file <- "../input/health/sportPAmodel_raw_hurdle_model.csv"
+dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
+write.csv(sportPAmodel, file = output_file, row.names = FALSE)
+cat("Recreational mMET hours/week (Sport/PA model) coefficients saved to:", output_file, "\n")
+
 ```
 
 ### Evaluating model fit
