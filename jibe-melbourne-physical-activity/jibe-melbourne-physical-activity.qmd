@@ -560,15 +560,15 @@ summ(m.mMETs_recreational$zeroModel, confint = TRUE, digits = 3)
 #| output: true
 
 # Negative binomial model for amount of mMET hours/week physical activity
-m.mMETs_recreational$neg_binom_over0 <- glm.nb(
+m.mMETs_recreational$linear <- lm(
     mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1,
     data = pa_data_over0
 )
 
-summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
+summ(m.mMETs_recreational$linear, confint = TRUE, digits = 3)
 ```
 
-The hurdle model results indicate that the likelihood of reporting zero recreational physical activity (logistic regression) increases significantly with age, particularly for individuals aged 35 and older, with the strongest effect observed in the 75+ age group. Employment and student status are associated with lower odds of reporting zero activity, while higher socio-economic status (measured by IRSD) also reduces the likelihood of zero activity. According to the negative binomial model for those reporting non-zero activity, the amount of recreational physical activity decreases with age, with the largest reduction observed in the 75+ age group. Women engage in significantly less activity than men, while employment is associated with slightly higher activity levels. Socio-economic status has a small but positive association with the amount of activity, while clear evidence was not identified for an association between student status and recreational activity levels.
+The hurdle model results indicate that the likelihood of reporting zero recreational physical activity (logistic regression) increases significantly with age, particularly for individuals aged 35 and older, with the strongest effect observed in the 75+ age group. Employment and student status are associated with lower odds of reporting zero activity, while higher socio-economic status (measured by IRSD) also reduces the likelihood of zero activity. According to the linear model for those reporting non-zero activity, the amount of recreational physical activity decreases with age, with the largest reduction observed in the 75+ age group. Women engage in significantly less activity than men, while employment is associated with slightly higher activity levels. Socio-economic status has a small but positive association with the amount of activity, while clear evidence was not identified for an association between student status and recreational activity levels.
 
 ```{r}
 #| label: model-combined-results
@@ -576,8 +576,8 @@ The hurdle model results indicate that the likelihood of reporting zero recreati
 
 # Extract coefficients from the negative binomial model
 sportPAmodel <- data.frame(
-  Zero_Model = m.mMETs_recreational$zeroModel$coefficients,
-  Neg_Binom_Model = m.mMETs_recreational$neg_binom_over0$coefficients
+  zero = m.mMETs_recreational$zeroModel$coefficients,
+  linear = m.mMETs_recreational$linear$coefficients
 )
 print(sportPAmodel)
 
@@ -612,7 +612,7 @@ Predictions of amount of physical activity.
 #| label: review_combined_predictions
 #| output: true
 nonzero_predictions <- predict(
-    m.mMETs_recreational$neg_binom_over0, 
+    m.mMETs_recreational$linear, 
     type = "response", 
     newdata = pa_data)
 combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
@@ -642,22 +642,22 @@ Lets look at effects from the main predictive model for amount of mMET hours/wee
 #| label: effects-plots
 #| output: true
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = age_group, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = age_group, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = female, interval = TRUE, plot.points = TRUE, 
-            jitter = 0.05)
-            
-effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = is_employed, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = female, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
             
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = student_status, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = is_employed, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
             
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = irsd_sa1, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = student_status, interval = TRUE, plot.points = TRUE, 
+            jitter = 0.05)
+            
+effect_plot(
+    m.mMETs_recreational$linear, pred = irsd_sa1, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 ```
 
@@ -694,7 +694,7 @@ setDT(mmets_prediction)
 
 mmets_prediction[, mMETs_recreational := ifelse(
   zeroPrediction == FALSE,
-  predict(m.mMETs_recreational$neg_binom_over0, .SD, type = "response"),
+  predict(m.mMETs_recreational$linear, .SD, type = "response"),
   0
 )]
 ```
@@ -824,7 +824,7 @@ The various modelling choices are evaluated below to understand their implicatio
 #| output: true
 
 library(pscl) # for zero-inflated model
-m.mMETs_recreational$linear <- lm(
+m.mMETs_recreational$neg_binom_over0 <- glm.nb(
     mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1,
     data = pa_data_over0)
 
@@ -853,7 +853,7 @@ aic_values <- data.frame(
 print(aic_values)
 ```
 
-The negative binomial hurdle model appears to be the best model, and so was ultimately used in the main analysis.
+While the negative binomial hurdle has the lowest AIC, the linear model retains direct comparability with the Manchester approach so was ultimately used in the main analysis.
 
 ## Save output models
 ```{r}

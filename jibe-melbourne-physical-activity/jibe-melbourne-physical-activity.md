@@ -914,49 +914,44 @@ summ(m.mMETs_recreational$zeroModel, confint = TRUE, digits = 3)
 
 ``` r
 # Negative binomial model for amount of mMET hours/week physical activity
-m.mMETs_recreational$neg_binom_over0 <- glm.nb(
+m.mMETs_recreational$linear <- lm(
     mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1,
     data = pa_data_over0
 )
 
-summ(m.mMETs_recreational$neg_binom_over0, confint = TRUE, digits = 3)
+summ(m.mMETs_recreational$linear, confint = TRUE, digits = 3)
 ```
 
-|                    |                          |
-|:-------------------|-------------------------:|
-| Observations       |                    10358 |
-| Dependent variable |   mmet_hrs_wk_recreation |
-| Type               | Generalized linear model |
-| Family             | Negative Binomial(1.224) |
-| Link               |                      log |
+|                    |                        |
+|:-------------------|-----------------------:|
+| Observations       |                  10358 |
+| Dependent variable | mmet_hrs_wk_recreation |
+| Type               |  OLS linear regression |
 
  
 
-|                         |           |
-|:------------------------|----------:|
-| χ²(10347)               |   448.488 |
-| p                       |     0.000 |
-| Pseudo-R² (Cragg-Uhler) |     0.042 |
-| Pseudo-R² (McFadden)    |     0.006 |
-| AIC                     | 78062.223 |
-| BIC                     | 78149.169 |
+|             |        |
+|:------------|-------:|
+| F(10,10347) | 34.909 |
+| R²          |  0.033 |
+| Adj. R²     |  0.032 |
 
  
 
-|                           |   Est. |   2.5% |  97.5% |  z val. |     p |
+|                           |   Est. |   2.5% |  97.5% |  t val. |     p |
 |:--------------------------|-------:|-------:|-------:|--------:|------:|
-| (Intercept)               |  2.798 |  2.710 |  2.886 |  62.603 | 0.000 |
-| femaleTRUE                | -0.238 | -0.275 | -0.202 | -12.815 | 0.000 |
-| age_groupage_group_25_34  | -0.050 | -0.129 |  0.028 |  -1.253 | 0.210 |
-| age_groupage_group_35_44  | -0.173 | -0.252 | -0.093 |  -4.272 | 0.000 |
-| age_groupage_group_45_54  | -0.157 | -0.238 | -0.077 |  -3.832 | 0.000 |
-| age_groupage_group_55_64  | -0.161 | -0.243 | -0.078 |  -3.827 | 0.000 |
-| age_groupage_group_65_74  | -0.180 | -0.268 | -0.091 |  -3.960 | 0.000 |
-| age_groupage_group_over75 | -0.452 | -0.554 | -0.349 |  -8.624 | 0.000 |
-| is_employedTRUE           |  0.109 |  0.061 |  0.156 |   4.434 | 0.000 |
-| student_statusTRUE        |  0.012 | -0.050 |  0.074 |   0.368 | 0.713 |
-| irsd_sa1                  |  0.027 |  0.020 |  0.033 |   8.004 | 0.000 |
-|  Standard errors: MLE     |        |        |        |         |       |
+| (Intercept)               | 16.984 | 15.426 | 18.541 |  21.372 | 0.000 |
+| femaleTRUE                | -3.826 | -4.472 | -3.180 | -11.606 | 0.000 |
+| age_groupage_group_25_34  | -1.104 | -2.504 |  0.297 |  -1.544 | 0.123 |
+| age_groupage_group_35_44  | -2.932 | -4.342 | -1.522 |  -4.077 | 0.000 |
+| age_groupage_group_45_54  | -2.777 | -4.209 | -1.346 |  -3.803 | 0.000 |
+| age_groupage_group_55_64  | -2.940 | -4.404 | -1.477 |  -3.938 | 0.000 |
+| age_groupage_group_65_74  | -3.093 | -4.673 | -1.513 |  -3.837 | 0.000 |
+| age_groupage_group_over75 | -6.474 | -8.286 | -4.663 |  -7.006 | 0.000 |
+| is_employedTRUE           |  1.640 |  0.791 |  2.490 |   3.785 | 0.000 |
+| student_statusTRUE        |  0.336 | -0.770 |  1.441 |   0.595 | 0.552 |
+| irsd_sa1                  |  0.422 |  0.305 |  0.539 |   7.097 | 0.000 |
+|  Standard errors: OLS     |        |        |        |         |       |
 
 The hurdle model results indicate that the likelihood of reporting zero
 recreational physical activity (logistic regression) increases
@@ -964,12 +959,12 @@ significantly with age, particularly for individuals aged 35 and older,
 with the strongest effect observed in the 75+ age group. Employment and
 student status are associated with lower odds of reporting zero
 activity, while higher socio-economic status (measured by IRSD) also
-reduces the likelihood of zero activity. According to the negative
-binomial model for those reporting non-zero activity, the amount of
-recreational physical activity decreases with age, with the largest
-reduction observed in the 75+ age group. Women engage in significantly
-less activity than men, while employment is associated with slightly
-higher activity levels. Socio-economic status has a small but positive
+reduces the likelihood of zero activity. According to the linear model
+for those reporting non-zero activity, the amount of recreational
+physical activity decreases with age, with the largest reduction
+observed in the 75+ age group. Women engage in significantly less
+activity than men, while employment is associated with slightly higher
+activity levels. Socio-economic status has a small but positive
 association with the amount of activity, while clear evidence was not
 identified for an association between student status and recreational
 activity levels.
@@ -977,22 +972,22 @@ activity levels.
 ``` r
 # Extract coefficients from the negative binomial model
 sportPAmodel <- data.frame(
-  Zero_Model = m.mMETs_recreational$zeroModel$coefficients,
-  Neg_Binom_Model = m.mMETs_recreational$neg_binom_over0$coefficients
+  zero = m.mMETs_recreational$zeroModel$coefficients,
+  linear = m.mMETs_recreational$linear$coefficients
 )
 print(sportPAmodel)
-##                             Zero_Model Neg_Binom_Model
-## (Intercept)                0.044666911      2.79802821
-## femaleTRUE                -0.004902267     -0.23810983
-## age_groupage_group_25_34   0.053567493     -0.05021519
-## age_groupage_group_35_44   0.205214777     -0.17257809
-## age_groupage_group_45_54   0.283538562     -0.15718689
-## age_groupage_group_55_64   0.330456455     -0.16057669
-## age_groupage_group_65_74   0.225089953     -0.17960424
-## age_groupage_group_over75  0.772364276     -0.45155329
-## is_employedTRUE           -0.272948987      0.10850383
-## student_statusTRUE        -0.349519395      0.01167917
-## irsd_sa1                  -0.125746061      0.02685566
+##                                   zero     linear
+## (Intercept)                0.044666911 16.9835799
+## femaleTRUE                -0.004902267 -3.8258630
+## age_groupage_group_25_34   0.053567493 -1.1035224
+## age_groupage_group_35_44   0.205214777 -2.9319653
+## age_groupage_group_45_54   0.283538562 -2.7773944
+## age_groupage_group_55_64   0.330456455 -2.9403979
+## age_groupage_group_65_74   0.225089953 -3.0932776
+## age_groupage_group_over75  0.772364276 -6.4743742
+## is_employedTRUE           -0.272948987  1.6403829
+## student_statusTRUE        -0.349519395  0.3355277
+## irsd_sa1                  -0.125746061  0.4220022
 
 
 output_file <- "../../input/health/sportPAmodel_raw_hurdle_model.csv"
@@ -1024,7 +1019,7 @@ Predictions of amount of physical activity.
 
 ``` r
 nonzero_predictions <- predict(
-    m.mMETs_recreational$neg_binom_over0, 
+    m.mMETs_recreational$linear, 
     type = "response", 
     newdata = pa_data)
 combined_predictions <- ifelse(predicted_probabilities > 0.5, 0, nonzero_predictions)
@@ -1053,7 +1048,7 @@ hours/week:
 
 ``` r
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = age_group, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = age_group, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 ```
 
@@ -1061,7 +1056,7 @@ effect_plot(
 
 ``` r
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = female, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = female, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 ```
 
@@ -1070,7 +1065,7 @@ effect_plot(
 ``` r
             
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = is_employed, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = is_employed, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 ```
 
@@ -1079,7 +1074,7 @@ effect_plot(
 ``` r
             
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = student_status, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = student_status, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 ```
 
@@ -1088,7 +1083,7 @@ effect_plot(
 ``` r
             
 effect_plot(
-    m.mMETs_recreational$neg_binom_over0, pred = irsd_sa1, interval = TRUE, plot.points = TRUE, 
+    m.mMETs_recreational$linear, pred = irsd_sa1, interval = TRUE, plot.points = TRUE, 
             jitter = 0.05)
 ```
 
@@ -1115,7 +1110,7 @@ mmets_prediction=MonteCarlo(m.mMETs_recreational$zeroModel,data)
 table(mmets_prediction$zeroPrediction)
 ## 
 ##   FALSE    TRUE 
-## 2013919 1179894
+## 2015391 1178422
 ```
 
 #### Prediction of amount of recreational physical activity
@@ -1125,7 +1120,7 @@ setDT(mmets_prediction)
 
 mmets_prediction[, mMETs_recreational := ifelse(
   zeroPrediction == FALSE,
-  predict(m.mMETs_recreational$neg_binom_over0, .SD, type = "response"),
+  predict(m.mMETs_recreational$linear, .SD, type = "response"),
   0
 )]
 ```
@@ -1136,7 +1131,7 @@ mmets_prediction[, mMETs_recreational := ifelse(
 synpop[mmets_prediction,on='AgentId',mMETs_recreational := i.mMETs_recreational]
 summary(synpop$mMETs_recreational)
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-##     0.0     0.0    13.3     9.7    16.1    21.7  980243
+##     0.0     0.0    13.2     9.8    16.4    21.5  980243
 ggplot(synpop)+stat_ecdf(aes(x=mMETs_recreational))
 ```
 
@@ -1249,9 +1244,9 @@ knitr::kable(
 | NHS (recreation) | Men | 7575 | 11.47 | 17.20 | 0 | 0.00 | 4.00 | 16.00 | 147.00 |
 | NHS (recreation) | Women | 8784 | 8.82 | 13.72 | 0 | 0.00 | 4.00 | 12.00 | 182.00 |
 | NHS (recreation) | Overall | 16359 | 10.05 | 15.49 | 0 | 0.00 | 4.00 | 14.00 | 182.00 |
-| Synthetic population (recreation) | Men | 1542991 | 10.92 | 8.51 | 0 | 0.00 | 15.80 | 17.85 | 21.72 |
-| Synthetic population (recreation) | Women | 1650822 | 8.57 | 6.68 | 0 | 0.00 | 12.45 | 14.03 | 17.12 |
-| Synthetic population (recreation) | Overall | 3193813 | 9.70 | 7.71 | 0 | 0.00 | 13.29 | 16.09 | 21.72 |
+| Synthetic population (recreation) | Men | 1542991 | 11.06 | 8.58 | 0 | 0.00 | 16.16 | 17.99 | 21.54 |
+| Synthetic population (recreation) | Women | 1650822 | 8.60 | 6.75 | 0 | 0.00 | 12.33 | 14.16 | 17.71 |
+| Synthetic population (recreation) | Overall | 3193813 | 9.79 | 7.79 | 0 | 0.00 | 13.23 | 16.45 | 21.54 |
 
 Marginal MET hours per week
 
@@ -1364,7 +1359,7 @@ implications on predictions.
 
 ``` r
 library(pscl) # for zero-inflated model
-m.mMETs_recreational$linear <- lm(
+m.mMETs_recreational$neg_binom_over0 <- glm.nb(
     mmet_hrs_wk_recreation ~ female + age_group + is_employed + student_status + irsd_sa1,
     data = pa_data_over0)
 
@@ -1398,8 +1393,9 @@ print(aic_values)
 ## 4 Zero-inflated negative binomial  97488.54
 ```
 
-The negative binomial hurdle model appears to be the best model, and so
-was ultimately used in the main analysis.
+While the negative binomial hurdle has the lowest AIC, the linear model
+retains direct comparability with the Manchester approach so was
+ultimately used in the main analysis.
 
 ## Save output models
 
