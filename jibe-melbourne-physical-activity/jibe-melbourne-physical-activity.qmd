@@ -99,6 +99,30 @@ Person-level variables of interest (see data dictionaries for detailed codes) in
 | Moderate exercise (mins)   | EXLWMMIN                                | Total minutes undertaken moderate exercise last week (for example, a light jog, strenght and toning exercises, lifting small boxes and sweeping)        |
 | Vigorous exercise (mins)   | EXLWVMIN                                | Total minutes undertaken vigorous exercise last week (for example, playing basketball, running, lifting heavy boxes, and strength and toning exercises) |
 
+Regarding the `AGEB` age bracket variable, the specific breaks for this are as follows (note that age brackets `4` and `5` are not 5-year brackets.  This allows distinguishing persons aged 18 and over:
+
+|Value | Age group   |
+|------|-------------|
+|1 |0 - 4 years      |
+|2 |5 - 9 years      |
+|3 |10 - 14 years    |
+|4 |15 - 17 years    |
+|5 |18 - 19 years    |
+|6 |20 - 24 years    |
+|7 |25 - 29 years    |
+|8 |30 - 34 years    |
+|9 |35 - 39 years    |
+|10|40 - 44 years    |
+|11|45 - 49 years    |
+|12|50 - 54 years    |
+|13|55 - 59 years    |
+|14|60 - 64 years    |
+|15|65 - 69 years    |
+|16|70 - 74 years    |
+|17|75 - 79 years    |
+|18|80 - 84 years    |
+|19|85 years and over|
+
 
 ## Methods
 
@@ -203,6 +227,7 @@ MMET_CYCLING <- 5.8 # From ithimr (check)
 MMET_WALKING <- 2.5 # From ithimr (check)
 
 pa_data <- nhs  %>%
+    filter(AGEB >= 5) %>%
     mutate_all(~ ifelse( . %in% c(99997, 99998), NA, .)) %>%
     mutate(
         walk_recreation_min = case_when(
@@ -225,7 +250,7 @@ pa_data <- nhs  %>%
     mutate(
         irsd_sa1 = SA1SF2DN,
         age_group = case_when(
-            AGEB < 7 ~ "age_group_under25",
+            AGEB < 7 ~ "age_group_18_25",
             AGEB < 9 ~ "age_group_25_34",
             AGEB < 11 ~ "age_group_35_44",
             AGEB < 13 ~ "age_group_45_54",
